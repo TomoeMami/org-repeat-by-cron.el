@@ -312,12 +312,14 @@ Otherwise, date only."
                       (next (org-repeat-by-cron-next-time norm-cron base-time day-and-p)))
             (when next
               (funcall resched-func nil (format-time-string fmt next))
-               (org-entry-put (point) org-repeat-by-cron-anchor-prop
-                               (format-time-string fmt next))
-                (org-todo 'todo)
-                (message "[repeat] repeated to %s%s"
-                         (format-time-string fmt next)
-                         (if has-cron ", reset state")))))))))
+              ;; When using deadline, we need to manually clear SHCEDULED timestamp
+              (when (string= deadline-str "t") (org-schedule '(4)))
+              (org-entry-put (point) org-repeat-by-cron-anchor-prop
+                             (format-time-string fmt next))
+              (org-todo 'todo)
+              (message "[repeat] repeated to %s%s"
+                       (format-time-string fmt next)
+                       (if has-cron ", reset state")))))))))
 
 (add-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron-on-done)
 
