@@ -1,7 +1,7 @@
 * org-repeat-by-cron.el
 基于 Cron 表达式的 Org 模式任务重复工具
 
-修改自 https://github.com/Raemi/org-reschedule-by-rule 。
+修改自 [[https://github.com/Raemi/org-reschedule-by-rule]]。
 
 不同之处：
 1. 使用elisp实现的一个cron解析器，不依赖python的 =croniter= 包
