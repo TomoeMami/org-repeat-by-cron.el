@@ -1,5 +1,7 @@
 * org-repeat-by-cron.el
 
+[[https://github.com/TomoeMami/org-repeat-by-cron.el/blob/main/README-cn.org][简体中文说明]]
+
 *** An Org mode task repeater based on Cron expressions
 
 Modified from [[https://www.google.com/url?sa=E&q=https%3A%2F%2Fgithub.com%2FRaemi%2Forg-reschedule-by-rule][https://github.com/Raemi/org-reschedule-by-rule]].
