@@ -130,34 +130,37 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
      ;; Default rule
      (t (setq dom-match-p (member day (org-repeat-by-cron--expand-field dom-rule 1 (calendar-last-day-of-month month year))))))
     
-    ;; 2. Evaluate Day-of-Week (DOW) rule
-    (cond
-     ;; Format: L5 or L7 -> last Friday/Sunday
-     ((string-match "L\\([0-7]\\)" dow-rule)
-      (let* ((target-dow (string-to-number (match-string 1 dow-rule)))
-             ;; If it's 7, convert to 0 (Sunday)
-             (final-dow (if (= target-dow 7) 0 target-dow)))
-        (setq dow-match-p (= day (org-repeat-by-cron--find-last-dow-of-month final-dow month year)))))
-     ;; Format: 5#3 or 7#3 -> 3rd Friday/Sunday
-     ((string-match "\\([0-7]\\)#\\([1-5]\\)" dow-rule)
-      (let* ((target-dow (string-to-number (match-string 1 dow-rule)))
-             (n (string-to-number (match-string 2 dow-rule)))
-             ;; If it's 7, convert to 0 (Sunday)
-             (final-dow (if (= target-dow 7) 0 target-dow)))
-        (setq dow-match-p (= day (org-repeat-by-cron--find-nth-dow-of-month n final-dow month year)))))
-     ;; Standard format (this part already handles 7 correctly)
-     (t (setq dow-match-p
-              (member dow
-                      (let ((d (org-repeat-by-cron--expand-field dow-rule 0 7)))
-                        (if (member 7 d) (sort (cl-delete-duplicates (cons 0 (remq 7 d))) '<) d))
-                      )))
+    ;; 2. Evaluate Day-of-Week (DOW) rule with comma-separated OR conditions
+    (setq dow-match-p
+          ;; Check if any of the comma-separated rules match
+          (cl-some
+           (lambda (part)
+             (cond
+              ;; Format: L5 or L7 -> last Friday/Sunday
+              ((string-match "L\\([0-7]\\)" part)
+               (let* ((target-dow (string-to-number (match-string 1 part)))
+                      ;; If it's 7, convert to 0 (Sunday)
+                      (final-dow (if (= target-dow 7) 0 target-dow)))
+                 (= day (org-repeat-by-cron--find-last-dow-of-month final-dow month year))))
+              ;; Format: 5#3 or 7#3 -> 3rd Friday/Sunday
+              ((string-match "\\([0-7]\\)#\\([1-5]\\)" part)
+               (let* ((target-dow (string-to-number (match-string 1 part)))
+                      (n (string-to-number (match-string 2 part)))
+                      ;; If it's 7, convert to 0 (Sunday)
+                      (final-dow (if (= target-dow 7) 0 target-dow)))
+                 (= day (org-repeat-by-cron--find-nth-dow-of-month n final-dow month year))))
+              ;; Standard format (this part already handles 7 correctly)
+              (t (member dow
+                         (let ((d (org-repeat-by-cron--expand-field part 0 7)))
+                           (if (member 7 d) (sort (cl-delete-duplicates (cons 0 (remq 7 d))) '<) d))))))
+           (split-string dow-rule ",")))
 
     ;; 3. Combine results
     (if (and (not (string= dom-rule "*")) (not (string= dow-rule "*")))
         (if day-and
             (and dom-match-p dow-match-p)
           (or dom-match-p dow-match-p))
-      (and dom-match-p dow-match-p)))))
+      (and dom-match-p dow-match-p))))
 
 
 ;; --- [Main Function] ---
