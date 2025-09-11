@@ -1,11 +1,40 @@
-;;; org-repeat-by-cron.el -*- lexical-binding: t; -*-
-;;
+;;; org-repeat-by-cron.el --- An Org mode task repeater based on Cron expressions -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025 TomoeMami
+
+;; Author: TomoeMami <trembleafterme@outlook.com>
+;; Created: 2025.09.09
+
+;; Keywords: calendar
+;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
+
+;; Version: 1.0.0
+;; Package-Requires: ((emacs "24.4"))
+
+;; This file is not part of GNU Emacs.
+
+;; This file is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This file is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+;;; Commentary:
 ;; Modified from org-reschedule-by-rule, DIFF:
 ;; 1. Use a simple elisp cron-parser instead of python package 'croniter'
 ;; 2. Replace 'INTERVAL' with 'DAY-AND' option
 
+;;; Change Log:
+
+;;; Code:
 (require 'org)
-(require 'subr-x)
 (require 'cl-lib)
 
 (defconst org-repeat-by-cron--month-aliases
@@ -213,17 +242,17 @@ DAY-AND is used to control how cron-parser handles 'day-of-month' and 'day-of-we
         nil))))
 
 (defvar org-repeat-by-cron-anchor-prop "REPEAT_ANCHOR"
-  "Property holding the last rescheduled timestamp. This serves as an
-anchor for rescheduling, independent of the current 'SCHEDULED' or 'DEADLINE'
+  "Property holding the last repeated timestamp. This serves as an
+anchor for repeating, independent of the current 'SCHEDULED' or 'DEADLINE'
 timestamp. The 'REPEAT_ANCHOR' is updated every
 time a rescheduling happened.")
 
-(defcustom org-repeat-by-cron-day-and-prop "REPEAT_DAY_AND"
+(defvar org-repeat-by-cron-day-and-prop "REPEAT_DAY_AND"
   "Property holding the `DAY-AND' optional. When 't' ,
  use 'AND' in 'DOM' and 'DOW', otherwise default to 'OR'.
 More: https://github.com/pallets-eco/croniter.")
 
-(defcustom org-repeat-by-cron-cron-prop "REPEAT_CRON"
+(defvar org-repeat-by-cron-cron-prop "REPEAT_CRON"
   "Property holding a day-only cron expression (DOM MON DOW), or a
 full (5-field) (min hour DOM MON DOW). The CRON expression restricts the
 possible dates to reschedule the task.")
@@ -281,27 +310,19 @@ Otherwise, date only."
     (save-excursion
       (org-back-to-heading t)
       (let* ((day-and-str   (org-entry-get (point) org-repeat-by-cron-day-and-prop nil))
-             (day-and-p     (if (string= day-and-str "t")
-                                 t
-                               nil))
+             (day-and-p     (if (string= day-and-str "t") t nil))
              (cron-str       (org-entry-get (point) org-repeat-by-cron-cron-prop nil))
              (deadline-str (org-entry-get (point) org-repeat-by-cron-deadline-prop nil))
-             (resched-func (if (string= deadline-str "t")
-                                'org-deadline
-                             'org-schedule))
+             (resched-func (if (string= deadline-str "t") #'org-deadline #'org-schedule))
              (has-cron       (and cron-str     (> (length (string-trim cron-str))     0)))
-             (repeat-time     (if (string= deadline-str "t")
-                                 (org-get-deadline-time (point))
-                               (org-get-scheduled-time (point))))
+             (repeat-time     (if (string= deadline-str "t")  (org-get-deadline-time (point)) (org-get-scheduled-time (point))))
              (anchor-str     (org-entry-get (point) org-repeat-by-cron-anchor-prop nil))
              (anchor-time    (when (and anchor-str (> (length (string-trim anchor-str)) 0))
                                (org-time-string-to-time anchor-str)))
              (base-time           (or anchor-time repeat-time (current-time)))
              (cron-arity          (when has-cron     (org-repeat-by-cron--cron-rule-arity cron-str)))
              (norm-cron      (when cron-arity        (org-repeat-by-cron--normalize-cron-rule cron-str)))
-             (resched-str  (if (string= deadline-str "t")
-                               (org-entry-get (point) "DEADLINE")
-                               (org-entry-get (point) "SCHEDULED")))
+             (resched-str  (org-entry-get (point) (if (string= deadline-str "t") "DEADLINE" "SCHEDULED")))
              (fmt            (org-repeat-by-cron--reschedule-use-time-p
                               anchor-str cron-arity resched-str)))
         (when has-cron
