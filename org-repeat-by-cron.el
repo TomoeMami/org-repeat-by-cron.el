@@ -48,26 +48,88 @@
     ("fri" . "5") ("sat" . "6"))
   "Mapping of day-of-week name abbreviations to numbers (0=Sunday).")
 
+(defvar org-repeat-by-cron-anchor-prop "REPEAT_ANCHOR"
+  "Name of the Org property for the cron repetition anchor timestamp.
+
+This variable holds the string used as the property key to store
+the base timestamp for cron-based repetitions.  When a repeating
+entry is marked as done, the function `org-repeat-by-cron-on-done'
+looks for this property to determine the starting point for
+calculating the next occurrence.  The property's value is then
+updated to the new scheduled time.")
+
+(defvar org-repeat-by-cron-day-and-prop "REPEAT_DAY_AND"
+  "Name of the Org property to control the day-of-month/day-of-week logic.
+
+This variable holds the string used as the property key to specify
+how the day-of-month and day-of-week fields of a cron rule are
+combined.  The function `org-repeat-by-cron-on-done' checks for
+this property in the Org entry.
+
+If this property's value is set to the string \"t\", a date must
+satisfy both the day-of-month and day-of-week rules (logical
+AND).  Otherwise, a date matches if it satisfies either rule
+(logical OR).")
+
+(defvar org-repeat-by-cron-cron-prop "REPEAT_CRON"
+  "Name of the Org property for the cron repetition rule.
+
+This variable holds the string used as the property key to store
+the cron repetition rule itself.  The function
+`org-repeat-by-cron-on-done' looks for an Org entry property
+with this key.  The value associated with this property must be a
+valid 3- or 5-field cron string.")
+
+(defvar org-repeat-by-cron-deadline-prop "REPEAT_DEADLINE"
+  "Name of the Org property to trigger deadline-based repetition.
+
+This variable holds the string used as a property key.  When the
+function `org-repeat-by-cron-on-done' processes a completed entry,
+it checks for a property with this key.  If the property exists
+and its value is the string \"t\", the function will update the
+entry's `DEADLINE` timestamp to the next calculated time.  In
+this case, any existing `SCHEDULED` timestamp on the entry will be
+removed.")
+
 ;; --- [Date Calculation Helper Functions] ---
 
 (defun org-repeat-by-cron--substitute-aliases (field-str alias-map)
-  "Replace text aliases in field string with numbers. Case-insensitive.
-Example: (org-repeat-by-cron--substitute-aliases \"MON-FRI\" org-repeat-by-cron--dow-aliases) -> \"1-5\""
+  "Replace textual aliases in FIELD-STR with numeric equivalents from ALIAS-MAP.
+
+This function performs a case-insensitive, whole-word replacement of
+aliases found in FIELD-STR.  Each alias is looked up as a key in
+ALIAS-MAP, which should be an association list of the form
+(ALIAS . NUMBER-STRING), and is replaced by its corresponding
+value.
+
+For example, if ALIAS-MAP maps \"mon\" to \"1\", this function
+would transform \"MON-FRI\" to \"1-5\". The function returns
+the transformed string."
   (let ((result (downcase field-str)))
     (dolist (pair alias-map result)
       (let ((alias (car pair))
             (number-str (cdr pair)))
-        ;; Use \b to ensure matching whole words only, avoiding replacing \"mon\" in \"monday\" (if applicable)
+        ;; Use \b to ensure matching whole words only.
         (setq result (replace-regexp-in-string (concat "\\b" alias "\\b")
                                                number-str result))))))
 
 (defun org-repeat-by-cron--get-dow (day month year)
-  "Return the day of the week for the given date (0=Sunday, ..., 6=Saturday)."
+  "Return the day of the week for the date specified
+by DAY, MONTH, and YEAR.  The returned value is an
+integer from 0,7 (Sunday) to 6 (Saturday)."
   (nth 6 (decode-time (encode-time 0 0 0 day month year))))
 
 (defun org-repeat-by-cron--find-nth-dow-of-month (n target-dow month year)
-  "Calculate the day of the month for the Nth occurrence of a given day-of-week in a month and year.
-Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-29, Monday)."
+  "Return the day of the month for the Nth TARGET-DOW in MONTH of YEAR.
+
+The argument N specifies the occurrence; for example, 1 for the
+first or 5 for the fifth.
+TARGET-DOW is an integer from 0 to 7 representing the day of
+the week, where 0,7 is Sunday, 1 is Monday, and so on.
+
+For example, to find the fifth (5) Monday (1) of
+September (9) in the year (2025), the function
+returns 29."
   (let* ((first-dow-of-month (org-repeat-by-cron--get-dow 1 month year))
          (day-offset (if (>= target-dow first-dow-of-month)
                          (- target-dow first-dow-of-month)
@@ -75,7 +137,13 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
     (+ 1 day-offset (* 7 (1- n)))))
 
 (defun org-repeat-by-cron--find-last-dow-of-month (target-dow month year)
-  "Calculate the last occurrence of a given day-of-week in a month and year."
+  "Return the day of the month for the last TARGET-DOW in MONTH of YEAR.
+
+TARGET-DOW is an integer from 0 to 7 representing the day of the
+week, where 0,7 is Sunday, 1 is Monday, and so on.
+
+For example, to find the last Sunday of September in the year 2025,
+ the functionreturns 28."
   (let* ((last-day (calendar-last-day-of-month month year))
          (last-dow (org-repeat-by-cron--get-dow last-day month year))
          (day-offset (if (>= last-dow target-dow)
@@ -84,16 +152,33 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
     (- last-day day-offset)))
 
 (defun org-repeat-by-cron--find-last-weekday-of-month (month year)
-  "Calculate the last weekday (Monday to Friday) of a month and year."
+  "Return the day of the month for the last weekday of MONTH and YEAR.
+
+A weekday is considered any day from Monday to Friday.  If the
+last calendar day of the month falls on a Saturday or Sunday, this
+function returns the day number of the preceding Friday.
+Otherwise, it returns the last day of the month."
   (let* ((last-day (calendar-last-day-of-month month year))
          (last-dow (org-repeat-by-cron--get-dow last-day month year)))
     (cond
-     ((= last-dow 6) (- last-day 1)) ; Saturday -> subtract 1 day, go back to Friday
-     ((= last-dow 0) (- last-day 2)) ; Sunday -> subtract 2 days, go back to Friday
+     ((= last-dow 6) (- last-day 1)) ; Saturday, go back to Friday
+     ((= last-dow 0) (- last-day 2)) ; Sunday, go back to Friday
      (t last-day))))
 
 (defun org-repeat-by-cron--find-nearest-weekday (target-day month year)
-  "Find the nearest weekday to TARGET-DAY without crossing month boundaries."
+  "Return the nearest weekday to TARGET-DAY within the given MONTH and YEAR.
+
+A weekday is any day from Monday to Friday.  If TARGET-DAY is
+already a weekday, it is returned unchanged.  If TARGET-DAY is a
+Saturday or a Sunday, this function returns the day of the month
+of the closest Friday or Monday.
+
+The key constraint is that the returned day will not cross month
+boundaries.  For example, if TARGET-DAY is Saturday the 1st,
+the function returns 3 (the following Monday), because moving to
+the preceding Friday would enter the previous month.  Conversely,
+if TARGET-DAY is a Sunday on the last day of the month, it
+returns the date of the preceding Friday."
   (let ((dow (org-repeat-by-cron--get-dow target-day month year)))
     (cond
      ;; Already a weekday (Monday to Friday)
@@ -109,7 +194,7 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
      ;; Sunday
      ((= dow 0)
       ;; If it's the last day of the month, cannot advance, must go back to Friday
-      (if (= target-day (org-repeat-by-cron--days-in-month month year))
+      (if (= target-day (calendar-last-day-of-month month year))
           (- target-day 2)
         ;; Otherwise, advance to Monday
         (+ target-day 1))))))
@@ -118,7 +203,27 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
 
 ;; org-repeat-by-cron--expand-field function is the standard field matcher
 (defun org-repeat-by-cron--expand-field (field-str min max)
-  "Expand the FIELD-STR into a list of numbers."
+  "Expand the cron-style FIELD-STR into a sorted list of numbers from MIN to MAX.
+
+This function parses FIELD-STR, which uses a syntax similar to
+cron time fields, and returns a sorted list of unique integers
+that fall within the inclusive range defined by MIN and MAX.
+
+The function supports the following formats within FIELD-STR:
+- `*`: A wildcard representing the full range from MIN to MAX.
+- `1,5,10`: A comma-separated list of individual values.
+- `0-10`: A hyphen-separated, inclusive range of values.
+- `*/5`: A step value applied to the full range.  It selects every
+  5th value, starting from MIN.
+- `10-30/5`: A step value applied to a specific range.
+
+These formats can be combined, for example, \"1-5,20-30/2\".
+
+Additionally, the function recognizes the \"W\" suffix (e.g., \"15W\"),
+which in some cron dialects means \"nearest weekday\".  This
+function will parse and include the numeric value (15) in the
+list, but it does not implement the logic for finding the
+nearest weekday.  That responsibility is left to the caller."
   ;; * Means all range.
   (if (string= field-str "*") (number-sequence min max)
     ;; Else, prepare numbers under rules.
@@ -144,7 +249,27 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
       (sort (cl-delete-duplicates values) '<))))
 
 (defun org-repeat-by-cron--day-fields-match-p (dom-rule dow-rule day month year &optional day-and)
-  "Dynamically check if a date matches the day-of-month (DOM) and day-of-week (DOW) rules, supports L, #, 15W, and 7=Sun."
+  "Return t if the date DAY, MONTH, YEAR matches DOM-RULE and DOW-RULE.
+
+This predicate evaluates if a specific date matches the combined
+day-of-month and day-of-week cron rules.
+
+The logic for combining the rules is as follows:
+- If either DOM-RULE or DOW-RULE is a wildcard (\"*\"), a date
+  matches only if it satisfies both rules (AND condition).
+- If both rules are specific (not \"*\"), their results are
+  combined with OR if DAY-AND is nil (by default),
+  otherwise AND if DAY-AND is t
+
+The DOM-RULE supports several special formats:
+- \"L\": The last day of the month.
+- \"LW\": The last weekday (Monday-Friday) of the month.
+- \"15W\": The nearest weekday to the 15th of the month.
+
+The DOW-RULE also supports special formats, which can be part of
+a comma-separated list:
+- \"L5\": The last Friday of the month.  Both 0 and 7 represent Sunday.
+- \"5#3\": The third Friday of the month."
   (let ((dow (org-repeat-by-cron--get-dow day month year)) dom-match-p dow-match-p)
     ;; 1. Evaluate Day-of-Month (DOM) rule
     (cond
@@ -196,9 +321,25 @@ Example: (org-repeat-by-cron--find-nth-dow-of-month 5 1 9 2025) -> 29 (2025-09-2
 ;; --- [Main Function] ---
 
 (defun org-repeat-by-cron-next-time (cron-string start-time &optional day-and)
-  "Efficiently find the next time matching CRON-STRING starting from START-TIME.
-Supports standard cron, 'L', '#', 'LW', '15W', and text abbreviations for months and days of the week.
-DAY-AND is used to control how cron-parser handles 'day-of-month' and 'day-of-week' entries. Default option is the cron behaviour, which connects those values using 'OR'. If the switch is set to True, the values are connected using 'AND'. "
+  "Return the next scheduled time after START-TIME that matches CRON-STRING.
+
+The function parses the five-field CRON-STRING to find the next valid
+occurrence, starting the search from the minute immediately after
+START-TIME.  It returns the result as an Emacs time value, or nil
+if no match is found before the year 2099.
+
+CRON-STRING must contain five space-separated fields:
+1. Minute (0-59)
+2. Hour (0-23)
+3. Day of Month (1-31, with special characters like 'L' or 'W')
+4. Month (1-12 or textual aliases like \"JAN\")
+5. Day of Week (0-7 or aliases like \"MON\"; 0 and 7 are Sunday)
+
+The optional argument DAY-AND determines how the day-of-month and
+day-of-week fields are combined when both are restricted(combined
+with comma ','). If DAY-AND is nil (by default), a date need only
+satisfy one of the conditions (OR). If it is t, a date must
+satisfy both conditions (AND)."
   (let* ((cron-parts (split-string cron-string "[ \t]+" t))
          (minute-rule (nth 0 cron-parts))
          (hour-rule (nth 1 cron-parts))
@@ -242,25 +383,12 @@ DAY-AND is used to control how cron-parser handles 'day-of-month' and 'day-of-we
                                               (encode-time 0 minute hour day month year)))))))))))))
         nil))))
 
-(defvar org-repeat-by-cron-anchor-prop "REPEAT_ANCHOR"
-  "Property holding the last repeated timestamp. This serves as an
-anchor for repeating, independent of the current 'SCHEDULED' or 'DEADLINE'
-timestamp. The 'REPEAT_ANCHOR' is updated every
-time a rescheduling happened.")
-
-(defvar org-repeat-by-cron-day-and-prop "REPEAT_DAY_AND"
-  "Property holding the `DAY-AND' optional. When 't' ,
- use 'AND' in 'DOM' and 'DOW', otherwise default to 'OR'.
-More: https://github.com/pallets-eco/croniter.")
-
-(defvar org-repeat-by-cron-cron-prop "REPEAT_CRON"
-  "Property holding a day-only cron expression (DOM MON DOW), or a
-full (5-field) (min hour DOM MON DOW). The CRON expression restricts the
-possible dates to reschedule the task.")
-
-
 (defun org-repeat-by-cron--cron-rule-arity (rule)
-  "Return number of fields in RULE (3 or 5), or nil if invalid."
+  "Return the number of fields in the cron string RULE.
+
+The function returns 3 if RULE contains three space-separated fields,
+and 5 if it contains five.  In all other cases, it returns nil.
+Whitespace at the beginning or end of RULE is ignored."
   (let* ((parts (split-string (string-trim rule) "[ \t]+" t))
          (n (length parts)))
     (cond ((= n 3) 3)
@@ -268,8 +396,15 @@ possible dates to reschedule the task.")
           (t nil))))
 
 (defun org-repeat-by-cron--normalize-cron-rule (rule)
-  "Normalize RULE into a 5-field cron for croniter.
-Accepts 3 fields (DOM MON DOW) or 5 fields (MIN HOUR DOM MON DOW)."
+  "Normalize the cron RULE string to a 5-field format.
+
+If RULE contains three fields (day-of-month, month, day-of-week),
+expand it by prepending \"0 0\" for the minute and hour.  If RULE
+already contains five fields, return it as is.  In both valid
+cases, leading and trailing whitespace is removed.
+
+If RULE has any other number of fields, this function posts an
+error message and returns nil."
   (let* ((parts (split-string (string-trim rule) "[ \t]+" t)))
     (pcase (length parts)
       (3 (concat "0 0 " (string-trim rule)))
@@ -279,12 +414,19 @@ Accepts 3 fields (DOM MON DOW) or 5 fields (MIN HOUR DOM MON DOW)."
            nil)))))
 
 (defun org-repeat-by-cron--reschedule-use-time-p (anchor-str cron-arity scheduled-str)
-  "Return a format string for the rescheduled timestamp.
-Choose format based on the first existing timestamp or rule:
-1. Else if ANCHOR exists, include time if it has HH:MM.
-2. Else if CRON is 5-field, include time.
-3. Else if SCHEDULED exists, include time if it has HH:MM.
-Otherwise, date only."
+  "Return the appropriate `format-time-string' format for a rescheduled timestamp.
+
+The function determines whether the new timestamp should include a
+time component based on ANCHOR-STR, CRON-ARITY, and SCHEDULED-STR.
+
+A format string including time (\"%Y-%m-%d %a %H:%M\") is returned
+if any of the following conditions are met, in order of precedence:
+1.  ANCHOR-STR is a non-nil string containing a time (e.g., \"HH:MM\").
+2.  CRON-ARITY is 5, indicating the cron rule specifies a time.
+3.  SCHEDULED-STR is a non-nil string containing a time.
+
+If none of these conditions are true, the function returns a
+date-only format string (\"%Y-%m-%d %a\")."
   (let ((fmt-time  "%Y-%m-%d %a %H:%M")
         (fmt-date  "%Y-%m-%d %a")
         (time-regexp "[0-9]\\{2\\}:[0-9]\\{2\\}"))
@@ -301,12 +443,35 @@ Otherwise, date only."
         fmt-date))
      (t fmt-date))))
 
-(defvar org-repeat-by-cron-deadline-prop "REPEAT_DEADLINE"
-  "When 't' , use 'org-deadline', otherwise default to 'org-schedule' ")
-
 ;;;###autoload
 (defun org-repeat-by-cron-on-done ()
-  "When a heading is DONE, reschedule it per RESCHEDULE_CRON."
+  "Reschedule an Org entry using a cron rule when it is marked DONE.
+
+This function is intended to be called from the hook
+`org-after-todo-state-change-hook'.  When an entry is marked with
+a DONE state, this function calculates the next scheduled time
+based on a cron rule and updates the entry accordingly.
+
+The behavior is controlled by properties within the entry's drawer:
+- The property stored in `org-repeat-by-cron-cron-prop' must contain
+  the cron string.  This is required.
+- The property in `org-repeat-by-cron-anchor-prop' stores the
+  base time for calculating the next occurrence.  This function
+  automatically updates this property to the new time after a
+  reschedule.
+- If the property in `org-repeat-by-cron-deadline-prop' is \"t\",
+  this function reschedules the `DEADLINE` timestamp and clears
+  the 'SCHEDULED' one.  Otherwise, it reschedules 'SCHEDULED'.
+- If the property in `org-repeat-by-cron-day-and-prop' is \"t\",
+  the day-of-month and day-of-week rules are combined with a
+  logical AND; otherwise, they are combined with OR.
+
+The base time for the calculation is chosen in the following order
+of precedence: the anchor property's time, the existing SCHEDULED
+or DEADLINE time, and finally the current time.
+
+Upon a successful reschedule, the entry's TODO state is reset to
+the first non-done state (TODO by default)."
   (when (org-entry-is-done-p)
     (save-excursion
       (org-back-to-heading t)
