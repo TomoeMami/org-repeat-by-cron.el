@@ -27,15 +27,15 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+
 ;; Modified from org-reschedule-by-rule, DIFF:
 ;; 1. Use a simple elisp cron-parser instead of python package 'croniter'
 ;; 2. Replace 'INTERVAL' with 'DAY-AND' option
 
-;;; Change Log:
-
 ;;; Code:
-(require 'org)
-(require 'cl-lib)
+
+(eval-when-compile (require 'cl-lib))
+(eval-when-compile (require 'org))
 
 (defconst org-repeat-by-cron--month-aliases
   '(("jan" . "1") ("feb" . "2") ("mar" . "3") ("apr" . "4") ("may" . "5")
@@ -60,6 +60,7 @@ Example: (org-repeat-by-cron--substitute-aliases \"MON-FRI\" org-repeat-by-cron-
         ;; Use \b to ensure matching whole words only, avoiding replacing \"mon\" in \"monday\" (if applicable)
         (setq result (replace-regexp-in-string (concat "\\b" alias "\\b")
                                                number-str result))))))
+
 (defun org-repeat-by-cron--get-dow (day month year)
   "Return the day of the week for the given date (0=Sunday, ..., 6=Saturday)."
   (nth 6 (decode-time (encode-time 0 0 0 day month year))))
