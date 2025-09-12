@@ -461,7 +461,7 @@ The behavior is controlled by properties within the entry's drawer:
   reschedule.
 - If the property in `org-repeat-by-cron-deadline-prop' is \"t\",
   this function reschedules the `DEADLINE` timestamp and clears
-  the 'SCHEDULED' one.  Otherwise, it reschedules 'SCHEDULED'.
+  the SCHEDULED one.  Otherwise, it reschedules SCHEDULED.
 - If the property in `org-repeat-by-cron-day-and-prop' is \"t\",
   the day-of-month and day-of-week rules are combined with a
   logical AND; otherwise, they are combined with OR.
