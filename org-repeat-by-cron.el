@@ -24,13 +24,37 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
-;; Modified from org-reschedule-by-rule, DIFF:
-;; 1. Use a simple elisp cron-parser instead of python package 'croniter'
-;; 2. Replace 'INTERVAL' with 'DAY-AND' option
+;; An Org mode task repeater based on Cron expressions
+;; Modified from https://github.com/Raemi/org-reschedule-by-rule.
+;; Key Differences:
+;; - Uses a cron parser implemented in pure Elisp, with no dependency on the Python croniter package.
+;; - Replaces the INTERVAL property with a DAY_AND property.
+;; - Supports toggling between SCHEDULED and DEADLINE timestamps.
+;; 
+;; org-repeat-by-cron.el is a lightweight extension for Emacs Org mode that allows you to repeat tasks based on powerful Cron expressions.
+;; Standard Org mode repeaters (like +1d , ++1w ) are based on the current SCHEDULED or DEADLINE timestamp. In contrast, this tool provides a repetition method based on absolute time rules. You can easily set a task to repeat "on the last Friday of every month" or "on the first Monday of each quarter" without manual date calculations.
+;; A core advantage of this tool is its pure Elisp implementation, which does not rely on any external programs (like Python's croniter library), ensuring it works out-of-the-box in Emacs environment.
+;; 
+;; Installation
+;; - Download =org-repeat-by-cron.el= and place it in your Emacs load-path.
+;; - Add the following code to your Emacs configuration file (e.g., init.el ):
+;;   #+begin_src elisp
+;; (require 'org-repeat-by-cron)
+;;   #+end_src
+;; 
+;; Using use-package
+;; 
+;; If you use use-package , the configuration is more concise:
+;; #+begin_src elisp
+;; (use-package org-repeat-by-cron
+;;   :ensure nil  ; If the file is already in your load-path
+;;   :load-path "/path/to/your/lisp/directory/")
+;; #+end_src
+;; 
+;; Tip: You should not use org-repeat-by-cron and the built-in Org repeater cookie (e.g., +1w) on the same task.
 
 ;;; Code:
 
@@ -67,9 +91,8 @@ combined.  The function `org-repeat-by-cron-on-done' checks for
 this property in the Org entry.
 
 If this property's value is set to the string \"t\", a date must
-satisfy both the day-of-month and day-of-week rules (logical
-AND).  Otherwise, a date matches if it satisfies either rule
-(logical OR).")
+satisfy both the day-of-month and day-of-week rules (logical AND).
+Otherwise, a date matches if it satisfies either rule (logical OR).")
 
 (defvar org-repeat-by-cron-cron-prop "REPEAT_CRON"
   "Name of the Org property for the cron repetition rule.
@@ -114,8 +137,9 @@ the transformed string."
                                                number-str result))))))
 
 (defun org-repeat-by-cron--get-dow (day month year)
-  "Return the day of the week for the date specified
-by DAY, MONTH, and YEAR.  The returned value is an
+  "Return the day of the week for the date.
+
+Specified by DAY, MONTH, and YEAR.  The returned value is an
 integer from 0,7 (Sunday) to 6 (Saturday)."
   (nth 6 (decode-time (encode-time 0 0 0 day month year))))
 
@@ -331,13 +355,13 @@ if no match is found before the year 2099.
 CRON-STRING must contain five space-separated fields:
 1. Minute (0-59)
 2. Hour (0-23)
-3. Day of Month (1-31, with special characters like 'L' or 'W')
+3. Day of Month (1-31, with special characters like \"L\" or \"W\")
 4. Month (1-12 or textual aliases like \"JAN\")
 5. Day of Week (0-7 or aliases like \"MON\"; 0 and 7 are Sunday)
 
 The optional argument DAY-AND determines how the day-of-month and
 day-of-week fields are combined when both are restricted(combined
-with comma ','). If DAY-AND is nil (by default), a date need only
+with comma \",\"). If DAY-AND is nil (by default), a date need only
 satisfy one of the conditions (OR). If it is t, a date must
 satisfy both conditions (AND)."
   (let* ((cron-parts (split-string cron-string "[ \t]+" t))
