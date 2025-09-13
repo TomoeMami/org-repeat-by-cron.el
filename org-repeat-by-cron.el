@@ -122,7 +122,7 @@ removed.")
 This function performs a case-insensitive, whole-word replacement of
 aliases found in FIELD-STR.  Each alias is looked up as a key in
 ALIAS-MAP, which should be an association list of the form
-(ALIAS . NUMBER-STRING), and is replaced by its corresponding
+\(ALIAS . NUMBER-STRING\), and is replaced by its corresponding
 value.
 
 For example, if ALIAS-MAP maps \"mon\" to \"1\", this function
