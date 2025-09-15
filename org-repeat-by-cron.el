@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.0.0
+;; Version: 1.0.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -30,13 +30,22 @@
 ;; An Org mode task repeater based on Cron expressions
 ;; Modified from https://github.com/Raemi/org-reschedule-by-rule.
 ;; Key Differences:
-;; - Uses a cron parser implemented in pure Elisp, with no dependency on the Python croniter package.
+;; - Uses a cron parser implemented in pure Elisp, with
+;;   no dependency on the Python croniter package.
 ;; - Replaces the INTERVAL property with a DAY_AND property.
 ;; - Supports toggling between SCHEDULED and DEADLINE timestamps.
 ;; 
-;; org-repeat-by-cron.el is a lightweight extension for Emacs Org mode that allows you to repeat tasks based on powerful Cron expressions.
-;; Standard Org mode repeaters (like +1d , ++1w ) are based on the current SCHEDULED or DEADLINE timestamp. In contrast, this tool provides a repetition method based on absolute time rules. You can easily set a task to repeat "on the last Friday of every month" or "on the first Monday of each quarter" without manual date calculations.
-;; A core advantage of this tool is its pure Elisp implementation, which does not rely on any external programs (like Python's croniter library), ensuring it works out-of-the-box in Emacs environment.
+;; org-repeat-by-cron.el is a lightweight extension for Emacs Org
+  ;; mode that allows you to repeat tasks based on powerful Cron expressions.
+;; Standard Org mode repeaters (like +1d , ++1w ) are based on
+;; the current SCHEDULED or DEADLINE timestamp. In contrast, this
+;; tool provides a repetition method based on absolute time rules.
+;; You can easily set a task to repeat \"on the last Friday of
+;; every month\" or \"on the first Monday of each quarter\"
+;; without manual date calculations.
+;; A core advantage of this tool is its pure Elisp implementation,
+;; which does not rely on any external programs (like Python's
+;; croniter library), ensuring it works out-of-the-box in Emacs environment.
 ;; 
 ;; Installation
 ;; - Download =org-repeat-by-cron.el= and place it in your Emacs load-path.
@@ -54,12 +63,17 @@
 ;;   :load-path "/path/to/your/lisp/directory/")
 ;; #+end_src
 ;; 
-;; Tip: You should not use org-repeat-by-cron and the built-in Org repeater cookie (e.g., +1w) on the same task.
+;; Tip: You should not use org-repeat-by-cron and the built-in
+;; Org repeater cookie (e.g., +1w) on the same task.
 
 ;;; Code:
 
-(eval-when-compile (require 'cl-lib))
-(eval-when-compile (require 'org))
+(require 'cl-lib)
+(require 'org)
+
+(defgroup org-repeat-by-cron nil
+  "Customizations for org-repeat-by-cron-mode."
+  :group 'org)
 
 (defconst org-repeat-by-cron--month-aliases
   '(("jan" . "1") ("feb" . "2") ("mar" . "3") ("apr" . "4") ("may" . "5")
@@ -72,7 +86,7 @@
     ("fri" . "5") ("sat" . "6"))
   "Mapping of day-of-week name abbreviations to numbers (0=Sunday).")
 
-(defvar org-repeat-by-cron-anchor-prop "REPEAT_ANCHOR"
+(defcustom org-repeat-by-cron-anchor-prop "REPEAT_ANCHOR"
   "Name of the Org property for the cron repetition anchor timestamp.
 
 This variable holds the string used as the property key to store
@@ -80,9 +94,11 @@ the base timestamp for cron-based repetitions.  When a repeating
 entry is marked as done, the function `org-repeat-by-cron-on-done'
 looks for this property to determine the starting point for
 calculating the next occurrence.  The property's value is then
-updated to the new scheduled time.")
+updated to the new scheduled time."
+  :group 'org-repeat-by-cron
+  :type 'string)
 
-(defvar org-repeat-by-cron-day-and-prop "REPEAT_DAY_AND"
+(defcustom org-repeat-by-cron-day-and-prop "REPEAT_DAY_AND"
   "Name of the Org property to control the day-of-month/day-of-week logic.
 
 This variable holds the string used as the property key to specify
@@ -92,18 +108,22 @@ this property in the Org entry.
 
 If this property's value is set to the string \"t\", a date must
 satisfy both the day-of-month and day-of-week rules (logical AND).
-Otherwise, a date matches if it satisfies either rule (logical OR).")
+Otherwise, a date matches if it satisfies either rule (logical OR)."
+  :group 'org-repeat-by-cron
+  :type 'string)
 
-(defvar org-repeat-by-cron-cron-prop "REPEAT_CRON"
+(defcustom  org-repeat-by-cron-cron-prop "REPEAT_CRON"
   "Name of the Org property for the cron repetition rule.
 
 This variable holds the string used as the property key to store
 the cron repetition rule itself.  The function
 `org-repeat-by-cron-on-done' looks for an Org entry property
 with this key.  The value associated with this property must be a
-valid 3- or 5-field cron string.")
+valid 3- or 5-field cron string."
+  :group 'org-repeat-by-cron
+  :type 'string)
 
-(defvar org-repeat-by-cron-deadline-prop "REPEAT_DEADLINE"
+(defcustom org-repeat-by-cron-deadline-prop "REPEAT_DEADLINE"
   "Name of the Org property to trigger deadline-based repetition.
 
 This variable holds the string used as a property key.  When the
@@ -112,7 +132,9 @@ it checks for a property with this key.  If the property exists
 and its value is the string \"t\", the function will update the
 entry's `DEADLINE` timestamp to the next calculated time.  In
 this case, any existing `SCHEDULED` timestamp on the entry will be
-removed.")
+removed."
+  :group 'org-repeat-by-cron
+  :type 'string)
 
 ;; --- [Date Calculation Helper Functions] ---
 
@@ -122,7 +144,7 @@ removed.")
 This function performs a case-insensitive, whole-word replacement of
 aliases found in FIELD-STR.  Each alias is looked up as a key in
 ALIAS-MAP, which should be an association list of the form
-(ALIAS . NUMBER-STRING), and is replaced by its corresponding
+\(ALIAS . NUMBER-STRING\), and is replaced by its corresponding
 value.
 
 For example, if ALIAS-MAP maps \"mon\" to \"1\", this function
@@ -262,7 +284,7 @@ nearest weekday.  That responsibility is left to the caller."
                  (base-range (if (string= base-str "*") (number-sequence min max)
                                (let ((r (mapcar #'string-to-number (split-string base-str "-")))) (number-sequence (car r) (cadr r)))))
                  (result '()))
-            (dolist (i base-range (nreverse result)) (when (zerop (% (- i min) step)) (push i result)))
+            (dolist (i base-range (setq result (nreverse result))) (when (zerop (% (- i min) step)) (push i result)))
             (setq values (append result values))))
          ;; Range
          ((string-match "-" part) (setq values (append (let ((r (mapcar #'string-to-number (split-string part "-")))) (number-sequence (car r) (cadr r))) values)))
@@ -467,7 +489,6 @@ date-only format string (\"%Y-%m-%d %a\")."
         fmt-date))
      (t fmt-date))))
 
-;;;###autoload
 (defun org-repeat-by-cron-on-done ()
   "Reschedule an Org entry using a cron rule when it is marked DONE.
 
@@ -532,7 +553,14 @@ the first non-done state (TODO by default)."
                        (format-time-string fmt next)
                        (if has-cron ", reset state")))))))))
 
-(add-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron-on-done)
+(define-minor-mode global-org-repeat-by-cron-mode
+  "A global minor mode globally enable org-repeat-by-cron."
+  :init-value nil
+  :global t
+  :group 'org-repeat-by-cron
+  (if global-org-repeat-by-cron-mode
+      (add-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron-on-done)
+    (remove-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron-on-done)))
 
 (provide 'org-repeat-by-cron)
 
