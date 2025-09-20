@@ -483,6 +483,8 @@ date-only format string (\"%Y-%m-%d %a\")."
         fmt-date))
      ((eq cron-arity 5)
       fmt-time)
+     ((eq cron-arity 3)
+      fmt-date)
      (scheduled-str
       (if (string-match-p time-regexp scheduled-str)
           fmt-time
