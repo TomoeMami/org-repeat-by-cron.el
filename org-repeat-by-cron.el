@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.0.1
+;; Version: 1.0.0
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -554,7 +554,7 @@ the first non-done state (TODO by default)."
               (message "[repeat] repeated to %s%s"
                        (format-time-string fmt next)
                        (if has-cron ", reset state")))))))))
-
+;;;###autoload
 (define-minor-mode global-org-repeat-by-cron-mode
   "A global minor mode globally enable org-repeat-by-cron."
   :init-value nil
