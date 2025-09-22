@@ -15,7 +15,8 @@ Key Differences:
 - Supports toggling between SCHEDULED and DEADLINE timestamps.
   
 
-=org-repeat-by-cron.el= is a lightweight extension for Emacs Org mode that allows you to repeat tasks based on powerful Cron expressions.
+=org-repeat-by-cron.el= is a lightweight extension for Emacs Org
+mode that allows you to repeat tasks based on powerful Cron expressions.
 
 Standard Org mode repeaters (like =+1d= , =++1w= ) are based on the current =SCHEDULED= or =DEADLINE= timestamp. In contrast, this tool provides a repetition method based on absolute time rules. You can easily set a task to repeat "on the last Friday of every month" or "on the first Monday of each quarter" without manual date calculations.
 
@@ -43,28 +44,18 @@ A core advantage of this tool is its pure Elisp implementation, which does not r
 - You can choose to update the task's =SCHEDULED= timestamp or =DEADLINE= timestamp (defaults to =SCHEDULED= ).
   
 
-* Installation
+* Installation and Configuration
 
-- Download =org-repeat-by-cron.el= and place it in your Emacs load-path.
-  
-- Add the following code to your Emacs configuration file (e.g., =init.el= ):
+Install via Melpa or by manually downloading the =org-repeat-by-cron.el= file.
 
-  #+begin_src elisp
-(require 'org-repeat-by-cron)
-  #+end_src
-  
+The recommended configuration is as follows:
 
-** Using =use-package= 
-
-If you use =use-package= , the configuration is more concise:
 #+begin_src elisp
 (use-package org-repeat-by-cron
   :ensure nil  ; If the file is already in your load-path
-  :load-path "/path/to/your/lisp/directory/")
+  :config
+  (global-org-repeat-by-cron-mode))
 #+end_src
-  
-
-Please note: The necessary hooks are already added within the package, so you do not need to add them manually.
 
 * Usage
 
@@ -78,12 +69,10 @@ To make an Org task repeat according to a Cron rule, simply add the =REPEAT_CRON
     
   - *3-field format*: day-of-month month day-of-week (minute and hour default to =0 0= ).
     
-  
 - =REPEAT_DAY_AND= : (Optional) If set to t, the "day of month" and "day of week" fields must both be satisfied ( =AND= logic). If not set or set to any other value, only one of them needs to be satisfied ( =OR= logic, which is standard Cron behavior).
   
 - =REPEAT_DEADLINE= : (Optional) If set to t, the task's =DEADLINE= timestamp will be updated when completed. Otherwise, the =SCHEDULED= timestamp is updated by default.
   
-
 ** Workflow
 
 - Add the =REPEAT_CRON= property and set your Cron expression under an Org heading.

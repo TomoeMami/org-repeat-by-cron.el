@@ -25,12 +25,18 @@
 - 支持通过 =DAY_AND= 属性切换“日”和“星期”字段的逻辑关系（默认 =OR= ）。
 - 支持月份（ =JAN-DEC= ）和星期（ =SUN-SAT= ）的英文缩写，使表达式更具可读性。
 - 您可以选择让它更新任务的 =SCHEDULED= 时间戳或 =DEADLINE= 时间戳（默认 =SCHEDULED= ）。
-** 安装
-1.  将 =org-repeat-by-cron.el= 文件下载并放置到您的 Emacs =load-path= 中。
-2.  在您的 Emacs 配置文件（如 =init.el=）中添加以下代码：
-#+begin_src emacs-lisp
-(require 'org-repeat-by-cron)
+** 安装与配置
+
+通过Melpa安装，或手动下载 =org-repeat-by-cron.el= 文件。
+
+推荐的配置如下：
+#+begin_src elisp
+(use-package org-repeat-by-cron
+  :ensure nil  ; If the file is already in your load-path
+  :config
+  (global-org-repeat-by-cron-mode))
 #+end_src
+
 *** 使用 use-package
 
 如果您使用 use-package，配置会更简洁：
