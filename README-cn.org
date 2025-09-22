@@ -37,19 +37,6 @@
   (global-org-repeat-by-cron-mode))
 #+end_src
 
-*** 使用 use-package
-
-如果您使用 use-package，配置会更简洁：
-
-#+begin_src emacs-lisp
-(use-package org-repeat-by-cron
-  :ensure nil  ; 如果文件已在 load-path 中
-  :load-path "/path/to/your/lisp/directory/" )
-#+end_src
-  
-
-请注意： =add-hook= 的操作已在包内完成，您无需手动添加。
-
 ** 使用方法
 
 要使一个 Org 任务能够按 Cron 规则重复，您只需在其 =PROPERTIES= 抽屉中添加 =REPEAT_CRON= 属性。
