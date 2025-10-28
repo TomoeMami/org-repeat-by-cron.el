@@ -8,7 +8,8 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.0.0
+;; Package-Version: 20250922.610
+;; Package-Revision: 1bd31d7aa0b3
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -491,11 +492,11 @@ date-only format string (\"%Y-%m-%d %a\")."
         fmt-date))
      (t fmt-date))))
 
-(defun org-repeat-by-cron-on-done ()
+(defun org-repeat-by-cron-on-done (change-plist)
   "Reschedule an Org entry using a cron rule when it is marked DONE.
 
 This function is intended to be called from the hook
-`org-after-todo-state-change-hook'.  When an entry is marked with
+`org-trigger-hook'.  When an entry is marked with
 a DONE state, this function calculates the next scheduled time
 based on a cron rule and updates the entry accordingly.
 
@@ -519,41 +520,44 @@ or DEADLINE time, and finally the current time.
 
 Upon a successful reschedule, the entry's TODO state is reset to
 the first non-done state (TODO by default)."
-  (when (org-entry-is-done-p)
-    (save-excursion
-      (org-back-to-heading t)
-      (let* ((day-and-str   (org-entry-get (point) org-repeat-by-cron-day-and-prop nil))
-             (day-and-p     (if (string= day-and-str "t") t nil))
-             (cron-str       (org-entry-get (point) org-repeat-by-cron-cron-prop nil))
-             (deadline-str (org-entry-get (point) org-repeat-by-cron-deadline-prop nil))
-             (resched-func (if (string= deadline-str "t") #'org-deadline #'org-schedule))
-             (has-cron       (and cron-str     (> (length (string-trim cron-str))     0)))
-             (repeat-time     (if (string= deadline-str "t")  (org-get-deadline-time (point)) (org-get-scheduled-time (point))))
-             (anchor-str     (org-entry-get (point) org-repeat-by-cron-anchor-prop nil))
-             (anchor-time    (when (and anchor-str (> (length (string-trim anchor-str)) 0))
-                               (org-time-string-to-time anchor-str)))
-             (base-time           (or anchor-time repeat-time (current-time)))
-             (cron-arity          (when has-cron     (org-repeat-by-cron--cron-rule-arity cron-str)))
-             (norm-cron      (when cron-arity        (org-repeat-by-cron--normalize-cron-rule cron-str)))
-             (resched-str  (org-entry-get (point) (if (string= deadline-str "t") "DEADLINE" "SCHEDULED")))
-             (fmt            (org-repeat-by-cron--reschedule-use-time-p
-                              anchor-str cron-arity resched-str)))
-        (when has-cron
-          (when (and has-cron (null cron-arity))
+  (let ((from-state (format "%s" (plist-get change-plist :from)))
+        (to-state (format "%s" (plist-get change-plist :to))))
+    (when (and (not (member from-state org-done-keywords))
+               (member to-state org-done-keywords))
+      (save-excursion
+        (org-back-to-heading t)
+        (let* ((day-and-str   (org-entry-get (point) org-repeat-by-cron-day-and-prop nil))
+               (day-and-p     (if (string= day-and-str "t") t nil))
+               (cron-str       (org-entry-get (point) org-repeat-by-cron-cron-prop nil))
+               (deadline-str (org-entry-get (point) org-repeat-by-cron-deadline-prop nil))
+               (resched-func (if (string= deadline-str "t") #'org-deadline #'org-schedule))
+               (has-cron       (and cron-str     (> (length (string-trim cron-str))     0)))
+               (repeat-time     (if (string= deadline-str "t")  (org-get-deadline-time (point)) (org-get-scheduled-time (point))))
+               (anchor-str     (org-entry-get (point) org-repeat-by-cron-anchor-prop nil))
+               (anchor-time    (when (and anchor-str (> (length (string-trim anchor-str)) 0))
+                                 (org-time-string-to-time anchor-str)))
+               (base-time           (or anchor-time repeat-time (current-time)))
+               (cron-arity          (when has-cron     (org-repeat-by-cron--cron-rule-arity cron-str)))
+               (norm-cron      (when cron-arity        (org-repeat-by-cron--normalize-cron-rule cron-str)))
+               (resched-str  (org-entry-get (point) (if (string= deadline-str "t") "DEADLINE" "SCHEDULED")))
+               (fmt            (org-repeat-by-cron--reschedule-use-time-p
+                                anchor-str cron-arity resched-str)))
+          (when has-cron
+            (when (and has-cron (null cron-arity))
               (message "[repeat] invalid cron rule, skipping"))
-          (when-let* ((bigger-time (if (time-less-p base-time nil) (current-time)
-                                     base-time))
-                      (next (org-repeat-by-cron-next-time norm-cron base-time day-and-p)))
-            (when next
-              (funcall resched-func nil (format-time-string fmt next))
-              ;; When using deadline, we need to manually clear SHCEDULED timestamp
-              (when (string= deadline-str "t") (org-schedule '(4)))
-              (org-entry-put (point) org-repeat-by-cron-anchor-prop
-                             (format-time-string fmt next))
-              (org-todo 'todo)
-              (message "[repeat] repeated to %s%s"
-                       (format-time-string fmt next)
-                       (if has-cron ", reset state")))))))))
+            (when-let* ((bigger-time (if (time-less-p base-time nil) (current-time)
+                                       base-time))
+                        (next (org-repeat-by-cron-next-time norm-cron base-time day-and-p)))
+              (when next
+                (funcall resched-func nil (format-time-string fmt next))
+                ;; When using deadline, we need to manually clear SHCEDULED timestamp
+                (when (string= deadline-str "t") (org-schedule '(4)))
+                (org-entry-put (point) org-repeat-by-cron-anchor-prop
+                               (format-time-string fmt next))
+                (org-todo 'todo)
+                (message "[repeat] repeated to %s%s"
+                         (format-time-string fmt next)
+                         (if has-cron ", reset state"))))))))))
 ;;;###autoload
 (define-minor-mode global-org-repeat-by-cron-mode
   "A global minor mode globally enable org-repeat-by-cron."
@@ -561,8 +565,8 @@ the first non-done state (TODO by default)."
   :global t
   :group 'org-repeat-by-cron
   (if global-org-repeat-by-cron-mode
-      (add-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron-on-done)
-    (remove-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron-on-done)))
+      (add-hook 'org-trigger-hook #'org-repeat-by-cron-on-done)
+    (remove-hook 'org-trigger-hook #'org-repeat-by-cron-on-done)))
 
 (provide 'org-repeat-by-cron)
 
