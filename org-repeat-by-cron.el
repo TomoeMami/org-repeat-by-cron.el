@@ -546,7 +546,7 @@ the first non-done state (TODO by default)."
               (message "[repeat] invalid cron rule, skipping"))
             (when-let* ((bigger-time (if (time-less-p base-time nil) (current-time)
                                        base-time))
-                        (next (org-repeat-by-cron-next-time norm-cron base-time day-and-p)))
+                        (next (org-repeat-by-cron-next-time norm-cron bigger-time day-and-p)))
               (when next
                 (funcall resched-func nil (format-time-string fmt next))
                 ;; When using deadline, we need to manually clear SHCEDULED timestamp
