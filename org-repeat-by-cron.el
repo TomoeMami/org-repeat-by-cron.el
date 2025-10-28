@@ -8,8 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Package-Version: 20250922.610
-;; Package-Revision: 1bd31d7aa0b3
+;; Version: 1.0.2
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
