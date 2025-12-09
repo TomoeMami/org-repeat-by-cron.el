@@ -93,7 +93,7 @@ SCHEDULED: <2025-12-14 Sun>
 :END:
 #+end_src
 
-Note: If you do not want to specify the hour and minute for the repeat time, use the abbreviated 3-segment format. For a detailed discussion, see the later section on [[Core Properties]].
+Note: If you do not want to specify the hour and minute for the repeat time, use the abbreviated 3-segment format. For a detailed discussion, see the later section.
 ** Core Properties
 
 - =REPEAT_CRON= : ( *Required* ) A string containing the Cron expression.
@@ -101,7 +101,8 @@ Note: If you do not want to specify the hour and minute for the repeat time, use
   - *5-field format*: minute hour day-of-month month day-of-week (e.g., =0 9 * * *= for every day at 9:00 AM).
     
   - *3-field format*: day-of-month month day-of-week (default to day task, no =HH:MM=  ).
-    Note: In Emacs, =SCHEDULED= or =DEADLINE= timestamps may omit the hours and minutes. To account for this scenario, we use a three‑field format to quickly specify tasks to the day.
+    
+    - Note: In Emacs, =SCHEDULED= or =DEADLINE= timestamps may omit the hours and minutes. To account for this scenario, we use a three‑field format to quickly specify tasks to the day.
     
 - =REPEAT_DAY_AND= : (Optional) If set to t, the "day of month" and "day of week" fields must both be satisfied ( =AND= logic). If not set or set to any other value, only one of them needs to be satisfied ( =OR= logic, which is standard Cron behavior).
   
