@@ -52,7 +52,7 @@ The recommended configuration is as follows:
 
 #+begin_src elisp
 (use-package org-repeat-by-cron
-  :ensure nil  ; If the file is already in your load-path
+  :ensure t  ; If the file is already in your load-path
   :config
   (global-org-repeat-by-cron-mode))
 #+end_src
