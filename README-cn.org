@@ -49,7 +49,7 @@
 #+begin_src org
 ,* TODO 周末课程
 :PROPERTIES:
-:REPEAT_CRON: "0 0 * * SAT,SUN" 
+:REPEAT_CRON: "* * SAT,SUN" 
 :END:
 #+end_src
 
@@ -59,7 +59,7 @@
 ,* TODO 周末课程
 SCHEDULED: <2025-12-13 周六>
 :PROPERTIES:
-:REPEAT_CRON: "0 0 * * SAT,SUN" 
+:REPEAT_CRON: "* * SAT,SUN" 
 :REPEAT_ANCHOR: 2025-12-13 周六
 :END:
 #+end_src

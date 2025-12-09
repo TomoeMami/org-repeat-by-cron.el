@@ -67,7 +67,7 @@ Suppose we have a weekly course:
 #+begin_src org
 ,* TODO Weekend Course
 :PROPERTIES:
-:REPEAT_CRON: "0 0 * * SAT,SUN"
+:REPEAT_CRON: "* * SAT,SUN"
 :END:
 #+end_src
 
@@ -77,7 +77,7 @@ When it is marked as done, it will automatically be scheduled to a date that mee
 ,* TODO Weekend Course
 SCHEDULED: <2025-12-13 Sat>
 :PROPERTIES:
-:REPEAT_CRON: "0 0 * * SAT,SUN"
+:REPEAT_CRON: "* * SAT,SUN"
 :REPEAT_ANCHOR: 2025-12-13 Sat
 :END:
 #+end_src
