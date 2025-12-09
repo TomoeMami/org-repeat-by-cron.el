@@ -60,14 +60,48 @@ The recommended configuration is as follows:
 * Usage
 
 To make an Org task repeat according to a Cron rule, simply add the =REPEAT_CRON= property to its =PROPERTIES= drawer.
+** Usage Example
 
+Suppose we have a weekly course:
+
+#+begin_src org
+,* TODO Weekend Course
+:PROPERTIES:
+:REPEAT_CRON: "0 0 * * SAT,SUN"
+:END:
+#+end_src
+
+When it is marked as done, it will automatically be scheduled to a date that meets the conditions. Taking today (December 9, 2025) as an example, it will be scheduled for this Saturday (December 13, 2025):
+
+#+begin_src org
+,* TODO Weekend Course
+SCHEDULED: <2025-12-13 Sat>
+:PROPERTIES:
+:REPEAT_CRON: "0 0 * * SAT,SUN"
+:REPEAT_ANCHOR: 2025-12-13 Sat
+:END:
+#+end_src
+
+Then, if it is marked as done again, it will calculate the next qualifying time point based on the =REPEAT_ANCHOR= and the current time, and schedule it accordingly:
+
+#+begin_src org
+,* TODO Weekend Course
+SCHEDULED: <2025-12-14 Sun>
+:PROPERTIES:
+:REPEAT_CRON: "* * SAT,SUN"
+:REPEAT_ANCHOR: 2025-12-14 Sun
+:END:
+#+end_src
+
+Note: If you do not want to specify the hour and minute for the repeat time, use the abbreviated 3-segment format. For a detailed discussion, see the later section on [[Core Properties]].
 ** Core Properties
 
 - =REPEAT_CRON= : ( *Required* ) A string containing the Cron expression.
   
   - *5-field format*: minute hour day-of-month month day-of-week (e.g., =0 9 * * *= for every day at 9:00 AM).
     
-  - *3-field format*: day-of-month month day-of-week (minute and hour default to =0 0= ).
+  - *3-field format*: day-of-month month day-of-week (default to day task, no =HH:MM=  ).
+    Note: In Emacs, =SCHEDULED= or =DEADLINE= timestamps may omit the hours and minutes. To account for this scenario, we use a three‑field format to quickly specify tasks to the day.
     
 - =REPEAT_DAY_AND= : (Optional) If set to t, the "day of month" and "day of week" fields must both be satisfied ( =AND= logic). If not set or set to any other value, only one of them needs to be satisfied ( =OR= logic, which is standard Cron behavior).
   
