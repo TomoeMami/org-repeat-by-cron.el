@@ -1,5 +1,7 @@
 * org-repeat-by-cron.el
 
+[[https://melpa.org/#/org-repeat-by-cron][https://melpastats-2761cf.gitlab.io/badges/org-repeat-by-cron-badge.svg]]
+
 [[https://github.com/TomoeMami/org-repeat-by-cron.el/blob/main/README-cn.org][简体中文说明]]
 
 *** An Org mode task repeater based on Cron expressions
