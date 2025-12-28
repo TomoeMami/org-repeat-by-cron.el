@@ -1,4 +1,7 @@
 * org-repeat-by-cron.el
+
+[[https://melpa.org/#/org-repeat-by-cron][https://melpastats-2761cf.gitlab.io/badges/org-repeat-by-cron-badge.svg]]
+
 基于 Cron 表达式的 Org 模式任务重复工具
 
 修改自 [[https://github.com/Raemi/org-reschedule-by-rule]]。
