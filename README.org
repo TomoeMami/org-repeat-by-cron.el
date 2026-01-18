@@ -157,7 +157,7 @@ A Cron expression consists of 5 fields, separated by spaces.
   
   - *"Last"*. In the "day of month" field, L means the last day of the month. In the "day of week" field, 5L means the last Friday of the month.
     
-  - =L= (day) -> Jan 31st, =L6= (day of week) -> the last Saturday of the month.
+  - =L= (day) -> Jan 31st, =5L= (day of week) -> the last Saturday of the month.
     
   
 - =W=

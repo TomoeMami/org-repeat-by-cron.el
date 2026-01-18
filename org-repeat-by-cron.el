@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.0.2
+;; Version: 1.0.4
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -375,8 +375,8 @@ a comma-separated list:
           (cl-some
            (lambda (part)
              (cond
-              ;; Format: L5 or L7 -> last Friday/Sunday
-              ((string-match "L\\([0-7]\\)" part)
+              ;; Format: 5L or 7L -> last Friday/Sunday
+              ((string-match "\\([0-7]\\)L" part)
                (let* ((target-dow (string-to-number (match-string 1 part)))
                       ;; If it's 7, convert to 0 (Sunday)
                       (final-dow (if (= target-dow 7) 0 target-dow)))
