@@ -32,7 +32,7 @@ A core advantage of this tool is its pure Elisp implementation, which does not r
   
 - Supports extended Cron syntax:
   
-  - =L= : Represents the "last day" of the month.
+  - =L= : Represents the "last day" of the month or week.
     
   - =W= : Represents the nearest "weekday".
     
