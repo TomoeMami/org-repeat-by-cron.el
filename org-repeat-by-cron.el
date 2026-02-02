@@ -505,8 +505,8 @@ time component based on ANCHOR-STR, CRON-ARITY, and SCHEDULED-STR.
 
 A format string including time (\"%Y-%m-%d %a %H:%M\") is returned
 if any of the following conditions are met, in order of precedence:
-1.  ANCHOR-STR is a non-nil string containing a time (e.g., \"HH:MM\").
-2.  CRON-ARITY is 5, indicating the cron rule specifies a time.
+1.  CRON-ARITY is 5, indicating the cron rule specifies a time.
+2.  ANCHOR-STR is a non-nil string containing a time (e.g., \"HH:MM\").
 3.  SCHEDULED-STR is a non-nil string containing a time.
 
 If none of these conditions are true, the function returns a
@@ -515,14 +515,14 @@ date-only format string (\"%Y-%m-%d %a\")."
         (fmt-date  "%Y-%m-%d %a")
         (time-regexp "[0-9]\\{2\\}:[0-9]\\{2\\}"))
     (cond
-     (anchor-str
-      (if (string-match-p time-regexp anchor-str)
-          fmt-time
-        fmt-date))
      ((eq cron-arity 5)
       fmt-time)
      ((eq cron-arity 3)
       fmt-date)
+     (anchor-str
+      (if (string-match-p time-regexp anchor-str)
+          fmt-time
+        fmt-date))
      (scheduled-str
       (if (string-match-p time-regexp scheduled-str)
           fmt-time
