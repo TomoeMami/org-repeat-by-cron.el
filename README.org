@@ -62,6 +62,8 @@ The recommended configuration is as follows:
 * Usage
 
 To make an Org task repeat according to a Cron rule, simply add the =REPEAT_CRON= property to its =PROPERTIES= drawer.
+
+TIP: The =REPEAT_CRON= property should not be wrapped in quotes.
 ** Usage Example
 
 Suppose we have a weekly course:
@@ -69,7 +71,7 @@ Suppose we have a weekly course:
 #+begin_src org
 ,* TODO Weekend Course
 :PROPERTIES:
-:REPEAT_CRON: "* * SAT,SUN"
+:REPEAT_CRON: * * SAT,SUN
 :END:
 #+end_src
 
@@ -79,7 +81,7 @@ When it is marked as done, it will automatically be scheduled to a date that mee
 ,* TODO Weekend Course
 SCHEDULED: <2025-12-13 Sat>
 :PROPERTIES:
-:REPEAT_CRON: "* * SAT,SUN"
+:REPEAT_CRON: * * SAT,SUN
 :REPEAT_ANCHOR: 2025-12-13 Sat
 :END:
 #+end_src
@@ -90,7 +92,7 @@ Then, if it is marked as done again, it will calculate the next qualifying time 
 ,* TODO Weekend Course
 SCHEDULED: <2025-12-14 Sun>
 :PROPERTIES:
-:REPEAT_CRON: "* * SAT,SUN"
+:REPEAT_CRON: * * SAT,SUN
 :REPEAT_ANCHOR: 2025-12-14 Sun
 :END:
 #+end_src
@@ -188,7 +190,7 @@ A task that needs to repeat every Friday at 5:00 PM.
 \* TODO Submit weekly report
 SCHEDULED: <2025-09-12 Fri 17:00>
 :PROPERTIES:
-:REPEAT_CRON: "0 17 * * FRI"
+:REPEAT_CRON: 0 17 * * FRI
 :END:
   
 #+end_src
@@ -202,7 +204,7 @@ A reminder to pay a bill on the last day of every month (using the 3-field forma
 \* TODO Pay credit card bill
 SCHEDULED: <2025-09-30 Tue>
 :PROPERTIES:
-:REPEAT_CRON: "L * *"
+:REPEAT_CRON: L * *
 :END:
   
 #+end_src
@@ -216,7 +218,7 @@ A meeting that occurs only on the first and third Monday of each month.
 \* TODO Attend bi-weekly tech sync meeting
 DEADLINE: <2025-10-06 Mon 10:00>
 :PROPERTIES:
-:REPEAT_CRON: "0 10 * * MON#1,MON#3"
+:REPEAT_CRON: 0 10 * * MON#1,MON#3
 :REPEAT_DEADLINE: t
 :END:
   
@@ -231,7 +233,7 @@ A task to be performed on the first Monday of the first month of each quarter.
 \* TODO Perform quarterly server maintenance
 SCHEDULED: <2025-10-06 Mon>
 :PROPERTIES:
-:REPEAT_CRON: "1 1 * JAN,APR,JUL,OCT MON#1"
+:REPEAT_CRON: 1 1 * JAN,APR,JUL,OCT MON#1
 :END:
 #+end_src
 

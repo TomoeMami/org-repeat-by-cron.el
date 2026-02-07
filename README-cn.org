@@ -45,6 +45,8 @@
 
 要使一个 Org 任务能够按 Cron 规则重复，您只需在其 =PROPERTIES= 抽屉中添加 =REPEAT_CRON= 属性。
 
+提示：这里的 =REPEAT_CRON= 属性不需要用引号包裹起来。
+
 *** 使用范例
 
 假如我们有一个每周末的课程：
@@ -52,7 +54,7 @@
 #+begin_src org
 ,* TODO 周末课程
 :PROPERTIES:
-:REPEAT_CRON: "* * SAT,SUN" 
+:REPEAT_CRON: * * SAT,SUN 
 :END:
 #+end_src
 
@@ -62,7 +64,7 @@
 ,* TODO 周末课程
 SCHEDULED: <2025-12-13 周六>
 :PROPERTIES:
-:REPEAT_CRON: "* * SAT,SUN" 
+:REPEAT_CRON: * * SAT,SUN 
 :REPEAT_ANCHOR: 2025-12-13 周六
 :END:
 #+end_src
@@ -73,7 +75,7 @@ SCHEDULED: <2025-12-13 周六>
 ,* TODO 周末课程
 SCHEDULED: <2025-12-14 周日>
 :PROPERTIES:
-:REPEAT_CRON: "* * SAT,SUN" 
+:REPEAT_CRON: * * SAT,SUN 
 :REPEAT_ANCHOR: 2025-12-14 周日
 :END:
 #+end_src
@@ -162,7 +164,7 @@ SCHEDULED: <2025-12-14 周日>
 \* TODO 提交每周工作报告
 SCHEDULED: <2025-09-12 Fri 17:00>
 :PROPERTIES:
-:REPEAT_CRON: "0 17 * * FRI"
+:REPEAT_CRON: 0 17 * * FRI
 :END:
 #+end_src
   
@@ -175,7 +177,7 @@ SCHEDULED: <2025-09-12 Fri 17:00>
 \* TODO 支付信用卡账单
 SCHEDULED: <2025-09-30 Tue>
 :PROPERTIES:
-:REPEAT_CRON: "L * *" 
+:REPEAT_CRON: L * * 
 :END:
 #+end_src
   
@@ -187,7 +189,7 @@ SCHEDULED: <2025-09-30 Tue>
 \* TODO 参加双周技术同步会
 DEADLINE: <2025-10-06 Mon 10:00>
 :PROPERTIES:
-:REPEAT_CRON: "0 10  * MON#1,MON#3"
+:REPEAT_CRON: 0 10  * MON#1,MON#3
 :REPEAT_DEADLINE: t
 :END:
   
@@ -201,7 +203,7 @@ DEADLINE: <2025-10-06 Mon 10:00>
 \* TODO 服务器季度维护
 SCHEDULED: <2025-10-06 Mon>
 :PROPERTIES:
-:REPEAT_CRON: "1 1 * JAN,APR,JUL,OCT MON#1"
+:REPEAT_CRON: 1 1 * JAN,APR,JUL,OCT MON#1
 :END:
   
 #+end_src
