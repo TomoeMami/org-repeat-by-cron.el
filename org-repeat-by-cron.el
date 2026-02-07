@@ -68,7 +68,7 @@
 ;; #+begin_src org
 ;; ,* TODO Weekend Course
 ;; :PROPERTIES:
-;; :REPEAT_CRON: "* * SAT,SUN"
+;; :REPEAT_CRON: * * SAT,SUN
 ;; :END:
 ;; #+end_src
 ;; 
@@ -81,7 +81,7 @@
 ;; ,* TODO Weekend Course
 ;; SCHEDULED: <2025-12-13 Sat>
 ;; :PROPERTIES:
-;; :REPEAT_CRON: "* * SAT,SUN"
+;; :REPEAT_CRON: * * SAT,SUN
 ;; :REPEAT_ANCHOR: 2025-12-13 Sat
 ;; :END:
 ;; #+end_src
@@ -94,7 +94,7 @@
 ;; ,* TODO Weekend Course
 ;; SCHEDULED: <2025-12-14 Sun>
 ;; :PROPERTIES:
-;; :REPEAT_CRON: "* * SAT,SUN"
+;; :REPEAT_CRON: * * SAT,SUN
 ;; :REPEAT_ANCHOR: 2025-12-14 Sun
 ;; :END:
 ;; #+end_src
