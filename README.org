@@ -9,10 +9,10 @@ An Org-mode task repeater based on Cron expressions.
 Modified from [[https://github.com/Raemi/org-reschedule-by-rule][org-reschedule-by-rule]].
 
 ** Key Differences
-1. **Pure Elisp Parser**: Implemented in pure Elisp with no dependency on external Python packages like =croniter=.
-2. **Logic Control**: Replaces the =INTERVAL= property with =DAY_AND= for sophisticated date matching (AND/OR logic for DOM and DOW).
-3. **Flexible Timestamps**: Supports toggling between updating =SCHEDULED= or =DEADLINE= timestamps.
-4. **Org Habit Compatibility**: Fully compatible with =org-habit=; it takes over rescheduling while preserving the habit's consistency graph.
+1. *Pure Elisp Parser*: Implemented in pure Elisp with no dependency on external Python packages like =croniter=.
+2. *Logic Control*: Replaces the =INTERVAL= property with =DAY_AND= for sophisticated date matching (AND/OR logic for DOM and DOW).
+3. *Flexible Timestamps*: Supports toggling between updating =SCHEDULED= or =DEADLINE= timestamps.
+4. *Org Habit Compatibility*: Fully compatible with =org-habit=; it takes over rescheduling while preserving the habit's consistency graph.
 
 =org-repeat-by-cron.el= is a lightweight extension for Emacs Org-mode that allows you to repeat tasks using the power of Cron expressions.
 
@@ -88,8 +88,8 @@ SCHEDULED: <2025-12-14 Sun>
 *** Core Properties
 
 - =REPEAT_CRON=: *(Required)* A string containing the Cron expression.
-  - **5-field format**: =Min Hour Dom Month Dow= (e.g., =0 9 * * *= for daily at 09:00). Generates a timestamp with =HH:MM=.
-  - **3-field format**: =Dom Month Dow=. Generates a date-only timestamp without =HH:MM=.
+  - *5-field format*: =Min Hour Dom Month Dow= (e.g., =0 9 * * *= for daily at 09:00). Generates a timestamp with =HH:MM=.
+  - *3-field format*: =Dom Month Dow=. Generates a date-only timestamp without =HH:MM=.
     - *Why use 3 fields?* In Org-mode, many tasks only need a date. If you want the task to appear in the "All Day" section of your Agenda, use the 3-field format. Use 5 fields only if you need a specific start time.
 - =REPEAT_DAY_AND=: *(Optional)* Defaults to nil (logic =OR=). Set to =t= to enable =AND= logic.
   - *OR (Default)*: =13 * FRI= triggers on the 13th of the month AND every Friday.
@@ -103,7 +103,7 @@ SCHEDULED: <2025-12-14 Sun>
 2. Add the =REPEAT_CRON= property with your expression.
 3. (Optional) Add =REPEAT_DAY_AND= or =REPEAT_DEADLINE=.
 4. Change the task state to =DONE= as usual.
-5. **Automatically**:
+5. *Automatically*:
    - =org-repeat-by-cron= captures the state change and preserves any existing =repeater= (e.g., =.+1d/2d=).
    - It calculates the next valid time based on =REPEAT_CRON=, ignoring the internal Org repeater for date calculation.
    - Updates the timestamp, restores the =repeater= cookie, and resets the state back to =TODO=.
@@ -136,16 +136,16 @@ Standard Cron expressions consist of 5 fields separated by spaces.
 *** Advanced Extensions
 
 - =L=
-  - **Last**: In the Day field, =L= means the last day of the month. In the Day of Week field, =5L= means the last Friday of the month.
+  - *Last*: In the Day field, =L= means the last day of the month. In the Day of Week field, =5L= means the last Friday of the month.
   - =L= (Day) -> Jan 31st, Feb 28th, etc.
   - =6L= (Day of Week) -> The last Saturday of the month.
 - =W=
-  - **Nearest Weekday**: =15W= means the closest weekday (Mon-Fri) to the 15th. If the 15th is a Saturday, it matches the 14th (Fri). If it's a Sunday, it matches the 16th (Mon).
+  - *Nearest Weekday*: =15W= means the closest weekday (Mon-Fri) to the 15th. If the 15th is a Saturday, it matches the 14th (Fri). If it's a Sunday, it matches the 16th (Mon).
   - It will not cross month boundaries (e.g., if the 1st is Saturday, =1W= matches the 3rd, Monday).
 - =LW=
-  - **Last Weekday of the month**.
+  - *Last Weekday of the month*.
 - =#=
-  - **Nth Day of Week**: Format is =DOW#N=.
+  - *Nth Day of Week*: Format is =DOW#N=.
   - =5#2= -> The second Friday of the month.
   - =1#1,1#3= -> The first and third Monday.
 
