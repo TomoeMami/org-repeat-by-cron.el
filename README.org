@@ -4,237 +4,224 @@
 
 [[https://github.com/TomoeMami/org-repeat-by-cron.el/blob/main/README-cn.org][简体中文说明]]
 
-*** An Org mode task repeater based on Cron expressions
+An Org-mode task repeater based on Cron expressions.
 
-Modified from [[https://github.com/Raemi/org-reschedule-by-rule]].
+Modified from [[https://github.com/Raemi/org-reschedule-by-rule][org-reschedule-by-rule]].
 
-Key Differences:
+** Key Differences
+1. **Pure Elisp Parser**: Implemented in pure Elisp with no dependency on external Python packages like =croniter=.
+2. **Logic Control**: Replaces the =INTERVAL= property with =DAY_AND= for sophisticated date matching (AND/OR logic for DOM and DOW).
+3. **Flexible Timestamps**: Supports toggling between updating =SCHEDULED= or =DEADLINE= timestamps.
+4. **Org Habit Compatibility**: Fully compatible with =org-habit=; it takes over rescheduling while preserving the habit's consistency graph.
 
-- Uses a cron parser implemented in pure Elisp, with no dependency on the Python croniter package.
-  
-- Replaces the =INTERVAL= property with a =DAY_AND= property.
-  
-- Supports toggling between SCHEDULED and DEADLINE timestamps.
-  
+=org-repeat-by-cron.el= is a lightweight extension for Emacs Org-mode that allows you to repeat tasks using the power of Cron expressions.
 
-=org-repeat-by-cron.el= is a lightweight extension for Emacs Org
-mode that allows you to repeat tasks based on powerful Cron expressions.
+Standard Org-mode repeaters (like =+1d=, =++1w=) are relative to the current =SCHEDULED= or =DEADLINE= timestamp. In contrast, this tool provides repetition based on absolute time rules. You can easily set a task to repeat "on the last Friday of every month" or "on the first Monday of each quarter" without manual date calculations.
 
-Standard Org mode repeaters (like =+1d= , =++1w= ) are based on the current =SCHEDULED= or =DEADLINE= timestamp. In contrast, this tool provides a repetition method based on absolute time rules. You can easily set a task to repeat "on the last Friday of every month" or "on the first Monday of each quarter" without manual date calculations.
+A core advantage is its pure Elisp implementation, ensuring it works out-of-the-box in any Emacs environment without external dependencies.
 
-A core advantage of this tool is its pure Elisp implementation, which does not rely on any external programs (like Python's =croniter= library), ensuring it works out-of-the-box in any Emacs environment.
+** Features
 
-* Features
+- Define complex repetition rules using standard 5-field Cron expressions (=Minute, Hour, Day, Month, Day of Week=).
+- Zero external dependencies; easy to install and efficient to run.
+- Supports advanced Cron extensions:
+  - =L=: Represents the "Last" day of the month or the last specific weekday of the month.
+  - =W=: Represents the "Nearest Weekday" (Mon-Fri) to a specific date.
+  - =#=: Represents the "Nth weekday of the month" (e.g., =5#2= for the second Friday).
+- Toggle logic for "Day of Month" and "Day of Week" fields using the =DAY_AND= property (defaults to =OR=).
+- Supports English aliases for months (=JAN-DEC=) and days (=SUN-SAT=) for better readability.
+- Choose whether to update the =SCHEDULED= or =DEADLINE= timestamp (defaults to =SCHEDULED=).
 
-- Define complex repetition rules using standard 5-field Cron expressions (minute, hour, day, month, day of week).
-  
-- Pure Elisp implementation with no external dependencies for simple installation and efficient operation.
-  
-- Supports extended Cron syntax:
-  
-  - =L= : Represents the "last day" of the month or week.
-    
-  - =W= : Represents the nearest "weekday".
-    
-  - =#= : Represents the "Nth day-of-week X", e.g., =5#2= means the second Friday.
-    
-  
-- Supports toggling the logic between the "day of month" and "day of week" fields using the =DAY_AND= property (default is =OR= ).
-  
-- Supports English abbreviations for months ( =JAN-DEC= ) and days of the week ( =SUN-SAT= ) for improved readability.
-  
-- You can choose to update the task's =SCHEDULED= timestamp or =DEADLINE= timestamp (defaults to =SCHEDULED= ).
-  
+** Installation & Configuration
 
-* Installation and Configuration
+Available via MELPA.
 
-Install via Melpa or by manually downloading the =org-repeat-by-cron.el= file.
-
-The recommended configuration is as follows:
-
+Recommended configuration:
 #+begin_src elisp
 (use-package org-repeat-by-cron
-  :ensure t  ; If the file is already in your load-path
+  :ensure t
   :config
   (global-org-repeat-by-cron-mode))
 #+end_src
 
-* Usage
+** Usage
 
 To make an Org task repeat according to a Cron rule, simply add the =REPEAT_CRON= property to its =PROPERTIES= drawer.
 
-TIP: The =REPEAT_CRON= property should not be wrapped in quotes.
-** Usage Example
+*Tip:* You do not need to wrap the =REPEAT_CRON= value in quotes.
 
-Suppose we have a weekly course:
+*** Example
+
+Suppose we have a weekly course held on weekends:
 
 #+begin_src org
 ,* TODO Weekend Course
 :PROPERTIES:
-:REPEAT_CRON: * * SAT,SUN
+:REPEAT_CRON: * * SAT,SUN 
 :END:
 #+end_src
 
-When it is marked as done, it will automatically be scheduled to a date that meets the conditions. Taking today (December 9, 2025) as an example, it will be scheduled for this Saturday (December 13, 2025):
+When marked as =DONE=, it will automatically be rescheduled to the next matching date. For example, if today is Dec 9, 2025, it will be scheduled for the coming Saturday (Dec 13, 2025):
 
 #+begin_src org
 ,* TODO Weekend Course
 SCHEDULED: <2025-12-13 Sat>
 :PROPERTIES:
-:REPEAT_CRON: * * SAT,SUN
+:REPEAT_CRON: * * SAT,SUN 
 :REPEAT_ANCHOR: 2025-12-13 Sat
 :END:
 #+end_src
 
-Then, if it is marked as done again, it will calculate the next qualifying time point based on the =REPEAT_ANCHOR= and the current time, and schedule it accordingly:
+Marking it =DONE= again will calculate the next point based on the =REPEAT_ANCHOR= and the current time:
 
 #+begin_src org
 ,* TODO Weekend Course
 SCHEDULED: <2025-12-14 Sun>
 :PROPERTIES:
-:REPEAT_CRON: * * SAT,SUN
+:REPEAT_CRON: * * SAT,SUN 
 :REPEAT_ANCHOR: 2025-12-14 Sun
 :END:
 #+end_src
 
-Note: If you do not want to specify the hour and minute for the repeat time, use the abbreviated 3-segment format. For a detailed discussion, see the later section.
-** Core Properties
+*Note:* If you do not want to specify a specific hour/minute, use the **3-field shorthand** (discussed below).
 
-- =REPEAT_CRON= : ( *Required* ) A string containing the Cron expression.
-  
-  - *5-field format*: minute hour day-of-month month day-of-week (e.g., =0 9 * * *= for every day at 9:00 AM).
-    
-  - *3-field format*: day-of-month month day-of-week (default to day task, no =HH:MM=  ).
-    
-    - Note: In Emacs, =SCHEDULED= or =DEADLINE= timestamps may omit the hours and minutes. To account for this scenario, we use a three‑field format to quickly specify tasks to the day.
-    
-- =REPEAT_DAY_AND= : (Optional) If set to t, the "day of month" and "day of week" fields must both be satisfied ( =AND= logic). If not set or set to any other value, only one of them needs to be satisfied ( =OR= logic, which is standard Cron behavior).
-  
-- =REPEAT_DEADLINE= : (Optional) If set to t, the task's =DEADLINE= timestamp will be updated when completed. Otherwise, the =SCHEDULED= timestamp is updated by default.
-  
-** Workflow
+*** Core Properties
 
-- Add the =REPEAT_CRON= property and set your Cron expression under an Org heading.
-  
-- (Optional) Add =REPEAT_DAY_AND= or =REPEAT_DEADLINE= as needed.
-  
-- Change the task's =TODO= state to =DONE= as you normally would.
-  
-- What happens automatically:
-  
-  - =org-repeat-by-cron= detects the state change.
-    
-  - It calculates the next valid time based on the =REPEAT_CRON= rule.
-    
-  - It updates the task's =SCHEDULED= or =DEADLINE= timestamp.
-    
-  - It resets the task's =TODO= state from =DONE= back to =TODO= (or your default initial state).
-    
+- =REPEAT_CRON=: *(Required)* A string containing the Cron expression.
+  - **5-field format**: =Min Hour Dom Month Dow= (e.g., =0 9 * * *= for daily at 09:00). Generates a timestamp with =HH:MM=.
+  - **3-field format**: =Dom Month Dow=. Generates a date-only timestamp without =HH:MM=.
+    - *Why use 3 fields?* In Org-mode, many tasks only need a date. If you want the task to appear in the "All Day" section of your Agenda, use the 3-field format. Use 5 fields only if you need a specific start time.
+- =REPEAT_DAY_AND=: *(Optional)* Defaults to nil (logic =OR=). Set to =t= to enable =AND= logic.
+  - *OR (Default)*: =13 * FRI= triggers on the 13th of the month AND every Friday.
+  - *AND (Set to t)*: =13 * FRI= triggers only on Friday the 13th.
+- =REPEAT_DEADLINE=: *(Optional)* Set to =t= to update the =DEADLINE= instead of =SCHEDULED=. *Note:* To prevent conflicts, enabling this will automatically clear any existing =SCHEDULED= timestamp.
+- =REPEAT_ANCHOR=: Automatically maintained by the plugin to store the last trigger base time. Users usually don't need to edit this. If deleted, the plugin will use the current time as the base for the next calculation.
 
-*Tip:* You should not use =org-repeat-by-cron= and the built-in Org repeater cookie (e.g., +1w) on the same task.
+*** Workflow
 
-* Cron Syntax Explained
+1. Create a =PROPERTIES= drawer under an Org heading.
+2. Add the =REPEAT_CRON= property with your expression.
+3. (Optional) Add =REPEAT_DAY_AND= or =REPEAT_DEADLINE=.
+4. Change the task state to =DONE= as usual.
+5. **Automatically**:
+   - =org-repeat-by-cron= captures the state change and preserves any existing =repeater= (e.g., =.+1d/2d=).
+   - It calculates the next valid time based on =REPEAT_CRON=, ignoring the internal Org repeater for date calculation.
+   - Updates the timestamp, restores the =repeater= cookie, and resets the state back to =TODO=.
 
-A Cron expression consists of 5 fields, separated by spaces.
+*Note:* When used with =org-habit=, the =repeater-cookie= is preserved to ensure the habit consistency graph (the colored bar) continues to function, while =org-repeat-by-cron= handles the actual rescheduling logic.
 
-| Field        |                           Allowed Values | Allowed Special Characters |
-|--------------+------------------------------------------+----------------------------|
-| Minute       |                                     0-59 | \* , - /                   |
-| Hour         |                                     0-23 | \* , - /                   |
-| Day of Month |                                     1-31 | \* , - / ? L W             |
-| Month        |                          1-12 or JAN-DEC | \* , - /                   |
-| Day of Week  | 0-7 (0 and 7 are both Sunday) or SUN-SAT | \* , - / ? L #             |
+** Cron Syntax
 
-** Special Characters
+Standard Cron expressions consist of 5 fields separated by spaces.
 
-| Character | Description                     | Example                                                           |
-| \*        | Matches any value in the field. | \* in the "hour" field means "every hour".                        |
-| ,         | Separates multiple values.      | 1,15 in the "day" field means "on the 1st and 15th of the month". |
-| \-        | Defines a range.                | MON-FRI in the "day of week" field means "from Monday to Friday". |
-| \/        | Defines a step value.           | \*/15 in the "minute" field means "every 15 minutes".             |
+| Field          | Allowed Values                      | Special Characters |
+|----------------+-------------------------------------+--------------------|
+| Minute         | 0-59                                | * , - /            |
+| Hour           | 0-23                                | * , - /            |
+| Day of Month   | 1-31                                | * , - / L W        |
+| Month          | 1-12 or JAN-DEC                     | * , - /            |
+| Day of Week    | 0-7 (0 and 7 are Sunday) or SUN-SAT | * , - / L #        |
 
-** Extended Syntax (Highlight Features)
+*Note:* This parser treats =*= as the full range and supports logic switching via =DAY_AND=, so the special character =?= is not required.
+
+*** Standard Characters
+
+| Char | Description           | Example                                       |
+|------+-----------------------+-----------------------------------------------|
+| *    | Any value             | * in Hour means "every hour"                  |
+| ,    | Value list            | 1,15 in Day means "the 1st and 15th"          |
+| -    | Range                 | MON-FRI in Day of Week means "Monday to Friday"|
+| /    | Step                  | */15 in Minute means "every 15 minutes"       |
+
+*** Advanced Extensions
 
 - =L=
-  
-  - *"Last"*. In the "day of month" field, L means the last day of the month. In the "day of week" field, 5L means the last Friday of the month.
-    
-  - =L= (day) -> Jan 31st, =6L= (day of week) -> the last Saturday of the month.
-    
-  
+  - **Last**: In the Day field, =L= means the last day of the month. In the Day of Week field, =5L= means the last Friday of the month.
+  - =L= (Day) -> Jan 31st, Feb 28th, etc.
+  - =6L= (Day of Week) -> The last Saturday of the month.
 - =W=
-  
-  - *"Weekday"* (Monday-Friday) nearest the given day. =15W= will find the nearest weekday to the 15th. If the 15th is a Saturday, it matches the 14th (Friday); if the 15th is a Sunday, it matches the 16th (Monday). It does not cross months: if the 1st is a Saturday, =1W= will match the 3rd (Monday); if the 31st is a Sunday, =31W= will match the 29th (Friday).
-    
-  
+  - **Nearest Weekday**: =15W= means the closest weekday (Mon-Fri) to the 15th. If the 15th is a Saturday, it matches the 14th (Fri). If it's a Sunday, it matches the 16th (Mon).
+  - It will not cross month boundaries (e.g., if the 1st is Saturday, =1W= matches the 3rd, Monday).
 - =LW=
-  
-  - *"Last weekday of the month"* .
-    
-  
+  - **Last Weekday of the month**.
 - =#=
-  
-  - *"The Nth day of week in the month"*. Format:  =DOW#N= .
-    
-  - =5#2= -> The second Friday. =1#1,1#3= -> The 1st and 3rd Monday.
-    
-  
+  - **Nth Day of Week**: Format is =DOW#N=.
+  - =5#2= -> The second Friday of the month.
+  - =1#1,1#3= -> The first and third Monday.
 
-* Examples
+** Examples
 
-** Example 1: Weekly Report
-
-A task that needs to repeat every Friday at 5:00 PM.
-
+*** 1. Weekly Report
+Repeat every Friday at 5:00 PM.
 #+begin_src org
-\* TODO Submit weekly report
+,* TODO Submit Weekly Report
 SCHEDULED: <2025-09-12 Fri 17:00>
 :PROPERTIES:
 :REPEAT_CRON: 0 17 * * FRI
 :END:
-  
 #+end_src
-  
 
-** Example 2: Monthly Bill Payment (Last Day)
-
-A reminder to pay a bill on the last day of every month (using the 3-field format).
-
+*** 2. Monthly Bill (Last Day)
+Reminder to pay bills on the last day of every month (using 3-field format).
 #+begin_src org
-\* TODO Pay credit card bill
+,* TODO Pay Credit Card Bill
 SCHEDULED: <2025-09-30 Tue>
 :PROPERTIES:
-:REPEAT_CRON: L * *
+:REPEAT_CRON: L * * 
 :END:
-  
 #+end_src
-  
 
-** Example 3: Bi-weekly Team Meeting
-
-A meeting that occurs only on the first and third Monday of each month.
-
+*** 3. Bi-weekly Meeting
+Meetings held on the 1st and 3rd Monday of the month.
 #+begin_src org
-\* TODO Attend bi-weekly tech sync meeting
+,* TODO Bi-weekly Sync Meeting
 DEADLINE: <2025-10-06 Mon 10:00>
 :PROPERTIES:
-:REPEAT_CRON: 0 10 * * MON#1,MON#3
+:REPEAT_CRON: 0 10 * MON#1,MON#3
 :REPEAT_DEADLINE: t
 :END:
-  
 #+end_src
-  
 
-** Example 4: Quarterly Maintenance Task
-
-A task to be performed on the first Monday of the first month of each quarter.
-
+*** 4. Quarterly Maintenance
+First Monday of the first month of every quarter.
 #+begin_src org
-\* TODO Perform quarterly server maintenance
+,* TODO Server Quarterly Maintenance
 SCHEDULED: <2025-10-06 Mon>
 :PROPERTIES:
-:REPEAT_CRON: 1 1 * JAN,APR,JUL,OCT MON#1
+:REPEAT_CRON: * JAN,APR,JUL,OCT MON#1
 :END:
 #+end_src
 
+*** 5. Gym Schedule (with org-habit)
+Workout Mon, Wed, Fri. Show habit tracking bars in Agenda, allowing a 2-day delay.
+#+begin_src org
+,* TODO Strength Training
+SCHEDULED: <2025-09-15 Mon .+1d/2d>
+:PROPERTIES:
+:STYLE:    habit
+:REPEAT_CRON: * * MON,WED,FRI
+:END:
+#+end_src
+*Note:* Always keep a repeater like =.+1d/2d= when using =org-habit= to preserve the consistency graph.
 
+* Changelog
+
+** 1.1.0 - Repeater Preservation
+1. Added support for native Org repeaters. =org-repeat-by-cron= now stashes the =repeater=, calculates the new date, and restores the cookie.
+2. Optimized internal logic.
+
+** 1.0.5 - Timestamp Formatting
+Improved logic for determining when to include time in the timestamp. It will use =%Y-%m-%d %a %H:%M= if:
+1. The cron rule has 5 fields.
+2. The =anchor-str= contains a time (=HH:MM=).
+3. The existing =SCHEDULED= or =DEADLINE= contains a time.
+
+** 1.0.4 - Syntax Consistency
+Changed the sequence of =L= and numbers from =L5= to =5L= to align with [[https://en.wikipedia.org/wiki/Cron#Non-standard_characters][standard Cron conventions]].
+
+** 1.0.2 - Logic Fixes
+1. Correctly compares =base-time= and =current-time= to ensure forward scheduling.
+2. Switched the default trigger hook from =org-after-todo-state-change-hook= to =org-trigger-hook= for better compatibility.
+
+** 1.0.1 - Initial Release
+Updated README and basic functionality.

@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.0.4
+;; Version: 1.1.0
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -101,8 +101,9 @@
 ;; 
 ;; Tip1: If you do not want to specify the hour and minute for the repeat time, 
 ;; use the abbreviated 3-segment format.
-;; Tip2: You should not use org-repeat-by-cron and the built-in
-;; Org repeater cookie (e.g., +1w) on the same task.
+;; Tip2: If you use org-repeat-by-cron with the built-in Org repeater
+;; cookie (e.g., +1w) on the same task, the build-in cookie will
+;; be ignored and preserved, so you can use this package with org-habit.
 
 ;;; Code:
 
@@ -174,6 +175,15 @@ removed."
   :group 'org-repeat-by-cron
   :type 'string)
 
+(defcustom org-repeat-by-cron-max-search-year 50
+  "Number of years to look ahead when searching for the next cron match.
+
+This value limits the search range of `org-repeat-by-cron-next-time'
+to prevent excessive processing if a cron rule is difficult to
+satisfy."
+  :group 'org-repeat-by-cron
+  :type 'integer)
+
 ;; --- [Date Calculation Helper Functions] ---
 
 (defun org-repeat-by-cron--substitute-aliases (field-str alias-map)
@@ -201,7 +211,7 @@ the transformed string."
 
 Specified by DAY, MONTH, and YEAR.  The returned value is an
 integer from 0,7 (Sunday) to 6 (Saturday)."
-  (nth 6 (decode-time (encode-time 0 0 0 day month year))))
+  (calendar-day-of-week (list month day year)))
 
 (defun org-repeat-by-cron--find-nth-dow-of-month (n target-dow month year)
   "Return the day of the month for the Nth TARGET-DOW in MONTH of YEAR.
@@ -309,25 +319,31 @@ function will parse and include the numeric value (15) in the
 list, but it does not implement the logic for finding the
 nearest weekday.  That responsibility is left to the caller."
   ;; * Means all range.
-  (if (string= field-str "*") (number-sequence min max)
+  (if (string= field-str "*")
+      (number-sequence min max)
     ;; Else, prepare numbers under rules.
-    (let ((values '()))
+    (let (values)
       ;; Split by ','
       (dolist (part (split-string field-str ","))
         (cond
          ;; Step
-         ((string-match "/\\([0-9]+\\)" part)
-          (let* ((step (string-to-number (match-string 1 part)))
-                 (base-str (substring part 0 (match-beginning 0)))
-                 (base-range (if (string= base-str "*") (number-sequence min max)
-                               (let ((r (mapcar #'string-to-number (split-string base-str "-")))) (number-sequence (car r) (cadr r)))))
-                 (result '()))
-            (dolist (i base-range (setq result (nreverse result))) (when (zerop (% (- i min) step)) (push i result)))
-            (setq values (append result values))))
+         ((string-match "\\(.*\\)/\\([0-9]+\\)" part)
+          (let* ((range-str (match-string 1 part))
+                 (step (string-to-number (match-string 2 part)))
+                 (range (if (string= range-str "*")
+                            (cons min max)
+                          (let ((r (split-string range-str "-")))
+                            (cons (string-to-number (car r)) (string-to-number (cadr r)))))))
+            (cl-loop for i from (car range) to (cdr range) by step
+                     do (push i values))))
          ;; Range
-         ((string-match "-" part) (setq values (append (let ((r (mapcar #'string-to-number (split-string part "-")))) (number-sequence (car r) (cadr r))) values)))
+         ((string-match "\\([0-9]+\\)-\\([0-9]+\\)" part)
+          (cl-loop for i from (string-to-number (match-string 1 part))
+                   to (string-to-number (match-string 2 part))
+                   do (push i values)))
          ;; Ignore [0-9]+W , deal with it later
-         ((string-match "\\([0-9]+\\)W" part) (push (string-to-number (match-string 1 part)) values))
+         ((string-match "\\([0-9]+\\)W" part)
+          (push (string-to-number (match-string 1 part)) values))
          ;; Default numbers, save it directly
          (t (push (string-to-number part) values))))
       (sort (cl-delete-duplicates values) '<))))
@@ -425,13 +441,14 @@ with comma \",\"). If DAY-AND is nil (by default), a date need only
 satisfy one of the conditions (OR). If it is t, a date must
 satisfy both conditions (AND)."
   (let* ((cron-parts (split-string cron-string "[ \t]+" t))
-         (minute-rule (nth 0 cron-parts))
-         (hour-rule (nth 1 cron-parts))
+         (minute-list   (org-repeat-by-cron--expand-field (nth 0 cron-parts) 0 59))
+         (hour-list  (org-repeat-by-cron--expand-field (nth 1 cron-parts) 0 23))
          (dom-rule (nth 2 cron-parts))
          ;; Convert abbreviations to numbers
          (month-rule (org-repeat-by-cron--substitute-aliases (nth 3 cron-parts) org-repeat-by-cron--month-aliases))
+         (month-list (org-repeat-by-cron--expand-field month-rule 1 12))
          (dow-rule (org-repeat-by-cron--substitute-aliases (nth 4 cron-parts) org-repeat-by-cron--dow-aliases))
-         (end-time-year 2099)
+         (end-time-year (+ (decoded-time-year (decode-time)) org-repeat-by-cron-max-search-year))
          ;; Start searching from the next minute
          (time (time-add start-time 60))
          (decoded-time (decode-time time)))
@@ -446,7 +463,7 @@ satisfy both conditions (AND)."
         ;; Iterate by year
         (cl-loop for year from start-year to end-time-year do
                  ;; Iterate through each month that matches the condition
-                 (dolist (month (org-repeat-by-cron--expand-field month-rule 1 12))
+                 (dolist (month month-list)
                    ;; If this month is greater than or equal to the starting month
                    (when (>= month (if (= year start-year) start-mon 1))
                      ;; Iterate through days of the month, starting from start day if it's the starting month
@@ -456,12 +473,12 @@ satisfy both conditions (AND)."
                               (when (org-repeat-by-cron--day-fields-match-p dom-rule dow-rule day month year day-and)
                                 (let ((current-hour-start (if (and (= year start-year) (= month start-mon) (= day start-day))
                                                               start-hour 0)))
-                                  (dolist (hour (org-repeat-by-cron--expand-field hour-rule 0 23))
+                                  (dolist (hour hour-list)
                                     ;; When hour satisfies the rule, check minutes
                                     (when (>= hour current-hour-start)
                                       (let ((current-min-start (if (and (= year start-year) (= month start-mon) (= day start-day) (= hour start-hour))
                                                                    start-min 0)))
-                                        (dolist (minute (org-repeat-by-cron--expand-field minute-rule 0 59))
+                                        (dolist (minute minute-list)
                                           (when (>= minute current-min-start)
                                             (cl-return-from finder
                                               (encode-time 0 minute hour day month year)))))))))))))
@@ -511,90 +528,89 @@ if any of the following conditions are met, in order of precedence:
 
 If none of these conditions are true, the function returns a
 date-only format string (\"%Y-%m-%d %a\")."
-  (let ((fmt-time  "%Y-%m-%d %a %H:%M")
-        (fmt-date  "%Y-%m-%d %a")
-        (time-regexp "[0-9]\\{2\\}:[0-9]\\{2\\}"))
-    (cond
-     ((eq cron-arity 5)
-      fmt-time)
-     ((eq cron-arity 3)
-      fmt-date)
-     (anchor-str
-      (if (string-match-p time-regexp anchor-str)
-          fmt-time
-        fmt-date))
-     (scheduled-str
-      (if (string-match-p time-regexp scheduled-str)
-          fmt-time
-        fmt-date))
-     (t fmt-date))))
+  (let ((time-regexp "[0-9]\\{2\\}:[0-9]\\{2\\}"))
+    (if (or (eq cron-arity 5)
+            (and anchor-str (string-match-p time-regexp anchor-str))
+            (and scheduled-str (string-match-p time-regexp scheduled-str)))
+        "%Y-%m-%d %a %H:%M"
+      "%Y-%m-%d %a")))
+
+(defun org-repeat-by-cron--extract-repeater (ts-str)
+  "Extract the repeater cookie from the Org timestamp string TS-STR.
+
+Return the match (e.g., '+1d', '++2w', or '.1m/3d') if found,
+otherwise nil."
+  (when (and ts-str 
+             (string-match "\\s-*\\([.+]\\{1,2\\}[0-9]+[hdwmy]\\(?:/[0-9]+[hdwmy]\\)?\\)" ts-str))
+    (match-string 1 ts-str)))
 
 (defun org-repeat-by-cron-on-done (change-plist)
-  "Reschedule an Org entry using a cron rule when it is marked DONE.
+  "Reschedule an Org entry using a cron rule based on CHANGE-PLIST.
 
-This function is intended to be called from the hook
-`org-trigger-hook'.  When an entry is marked with
-a DONE state, this function calculates the next scheduled time
-based on a cron rule and updates the entry accordingly.
+This function is intended for `org-trigger-hook' and runs when an
+entry is marked DONE. It calculates the next occurrence based on
+a cron expression and updates the timestamp accordingly.
 
-The behavior is controlled by properties within the entry's drawer:
-- The property stored in `org-repeat-by-cron-cron-prop' must contain
-  the cron string.  This is required.
-- The property in `org-repeat-by-cron-anchor-prop' stores the
-  base time for calculating the next occurrence.  This function
-  automatically updates this property to the new time after a
-  reschedule.
-- If the property in `org-repeat-by-cron-deadline-prop' is \"t\",
-  this function reschedules the `DEADLINE` timestamp and clears
-  the SCHEDULED one.  Otherwise, it reschedules SCHEDULED.
-- If the property in `org-repeat-by-cron-day-and-prop' is \"t\",
-  the day-of-month and day-of-week rules are combined with a
-  logical AND; otherwise, they are combined with OR.
+The behavior is governed by the following variables and properties:
 
-The base time for the calculation is chosen in the following order
-of precedence: the anchor property's time, the existing SCHEDULED
-or DEADLINE time, and finally the current time.
+The property named by `org-repeat-by-cron-cron-prop' defines the
+cron rule (required).
 
-Upon a successful reschedule, the entry's TODO state is reset to
-the first non-done state (TODO by default)."
+The property named by `org-repeat-by-cron-anchor-prop' stores
+the base time for calculation and is updated after rescheduling.
+
+If the property named by `org-repeat-by-cron-deadline-prop' is
+'t', reschedule 'DEADLINE' and clear 'SCHEDULED'.
+
+If the property named by `org-repeat-by-cron-day-and-prop' is
+'t', day-of-month and day-of-week rules use a logical AND.
+
+The base time is determined by checking the anchor property, then
+the existing timestamp, and finally the current time.
+Any existing repeater cookie (e.g., '++1w') in the original
+timestamp is ignored and preserved in the new one.
+Upon success, the entry's TODO state is reset to `todo'."
   (let ((from-state (format "%s" (plist-get change-plist :from)))
         (to-state (format "%s" (plist-get change-plist :to))))
     (when (and (not (member from-state org-done-keywords))
                (member to-state org-done-keywords))
       (save-excursion
         (org-back-to-heading t)
-        (let* ((day-and-str   (org-entry-get (point) org-repeat-by-cron-day-and-prop nil))
-               (day-and-p     (if (string= day-and-str "t") t nil))
-               (cron-str       (org-entry-get (point) org-repeat-by-cron-cron-prop nil))
-               (deadline-str (org-entry-get (point) org-repeat-by-cron-deadline-prop nil))
-               (resched-func (if (string= deadline-str "t") #'org-deadline #'org-schedule))
-               (has-cron       (and cron-str     (> (length (string-trim cron-str))     0)))
-               (repeat-time     (if (string= deadline-str "t")  (org-get-deadline-time (point)) (org-get-scheduled-time (point))))
-               (anchor-str     (org-entry-get (point) org-repeat-by-cron-anchor-prop nil))
-               (anchor-time    (when (and anchor-str (> (length (string-trim anchor-str)) 0))
-                                 (org-time-string-to-time anchor-str)))
-               (base-time           (or anchor-time repeat-time (current-time)))
-               (cron-arity          (when has-cron     (org-repeat-by-cron--cron-rule-arity cron-str)))
-               (norm-cron      (when cron-arity        (org-repeat-by-cron--normalize-cron-rule cron-str)))
-               (resched-str  (org-entry-get (point) (if (string= deadline-str "t") "DEADLINE" "SCHEDULED")))
-               (fmt            (org-repeat-by-cron--reschedule-use-time-p
-                                anchor-str cron-arity resched-str)))
-          (when has-cron
-            (when (and has-cron (null cron-arity))
-              (message "[repeat] invalid cron rule, skipping"))
-            (when-let* ((bigger-time (if (time-less-p base-time nil) (current-time)
-                                       base-time))
-                        (next (org-repeat-by-cron-next-time norm-cron bigger-time day-and-p)))
-              (when next
-                (funcall resched-func nil (format-time-string fmt next))
-                ;; When using deadline, we need to manually clear SHCEDULED timestamp
-                (when (string= deadline-str "t") (org-schedule '(4)))
-                (org-entry-put (point) org-repeat-by-cron-anchor-prop
-                               (format-time-string fmt next))
-                (org-todo 'todo)
-                (message "[repeat] repeated to %s%s"
-                         (format-time-string fmt next)
-                         (if has-cron ", reset state"))))))))))
+        (let* ((pom           (point))
+               (cron-str      (org-entry-get pom org-repeat-by-cron-cron-prop))
+               (cron-arity    (org-repeat-by-cron--cron-rule-arity cron-str)))
+          (when (and cron-str (not (string-empty-p (string-trim cron-str))))
+            (if (not cron-arity)
+                (message "[repeat] invalid cron rule: %s" cron-str)
+              (let* ((day-and-p     (string= (org-entry-get pom org-repeat-by-cron-day-and-prop) "t"))
+                     (deadline-p    (string= (org-entry-get pom org-repeat-by-cron-deadline-prop) "t"))
+                     (anchor-str    (org-entry-get pom org-repeat-by-cron-anchor-prop))
+                     (now           (current-time))
+                     (base-time     (or (and anchor-str (org-time-string-to-time anchor-str))
+                                        (if deadline-p (org-get-deadline-time pom) (org-get-scheduled-time pom))
+                                        now))
+                     (next          (org-repeat-by-cron-next-time (org-repeat-by-cron--normalize-cron-rule cron-str)
+                                                                  (if (time-less-p base-time now) now base-time)
+                                                                  day-and-p)))
+                (if (not next)
+                    (message "[repeat] Cannot find valid time before %s" (+ (decoded-time-year (decode-time)) 50))
+                  (let* ((resched-str     (org-entry-get pom (if deadline-p "DEADLINE" "SCHEDULED")))
+                         (fmt             (org-repeat-by-cron--reschedule-use-time-p
+                                           anchor-str cron-arity resched-str))
+                         (next-raw   (format-time-string fmt next))
+                         (repeater-cookie (org-repeat-by-cron--extract-repeater resched-str))
+                         (final-ts    (if repeater-cookie
+                                              (concat next-raw " " repeater-cookie)
+                                            next-raw)))
+                    (if deadline-p
+                        (progn (org-deadline nil final-ts)
+                               ;; When using deadline, we need to manually clear SHCEDULED timestamp
+                               (org-schedule '(4)))
+                      (org-schedule nil final-ts))
+                    (org-entry-put pom org-repeat-by-cron-anchor-prop next-raw)
+                    (org-todo 'todo)
+                    (message "[repeat] cron repeat to %s" next-raw)))))))))))
+
 ;;;###autoload
 (define-minor-mode global-org-repeat-by-cron-mode
   "A global minor mode globally enable org-repeat-by-cron."
@@ -608,4 +624,3 @@ the first non-done state (TODO by default)."
 (provide 'org-repeat-by-cron)
 
 ;;; org-repeat-by-cron.el ends here
-
