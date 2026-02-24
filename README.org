@@ -83,7 +83,7 @@ SCHEDULED: <2025-12-14 Sun>
 :END:
 #+end_src
 
-*Note:* If you do not want to specify a specific hour/minute, use the **3-field shorthand** (discussed below).
+*Note:* If you do not want to specify a specific hour/minute, use the *3-field shorthand* (discussed below).
 
 *** Core Properties
 
@@ -211,10 +211,10 @@ SCHEDULED: <2025-09-15 Mon .+1d/2d>
 2. Optimized internal logic.
 
 ** 1.0.5 - Timestamp Formatting
-Improved logic for determining when to include time in the timestamp. It will use =%Y-%m-%d %a %H:%M= if:
-1. The cron rule has 5 fields.
-2. The =anchor-str= contains a time (=HH:MM=).
-3. The existing =SCHEDULED= or =DEADLINE= contains a time.
+The rescheduled timestamp will include a time component (format  =%Y-%m-%d %a %H:%M= ) if any of the following conditions are met (evaluated in a logical =OR= sequence):
+1. 5-field Cron: The =REPEAT_CRON= rule has 5 fields, implying a specific time is intended.
+2. Time in Anchor: The =REPEAT_ANCHOR= property already contains a time string ( =HH:MM= ).
+3. Time in existing timestamp: The current =SCHEDULED= or =DEADLINE= timestamp already contains a time string.
 
 ** 1.0.4 - Syntax Consistency
 Changed the sequence of =L= and numbers from =L5= to =5L= to align with [[https://en.wikipedia.org/wiki/Cron#Non-standard_characters][standard Cron conventions]].
