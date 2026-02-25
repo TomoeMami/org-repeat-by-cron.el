@@ -494,11 +494,12 @@ satisfy both conditions (AND)."
 The function returns 3 if RULE contains three space-separated fields,
 and 5 if it contains five.  In all other cases, it returns nil.
 Whitespace at the beginning or end of RULE is ignored."
-  (let* ((parts (split-string (string-trim rule) "[ \t]+" t))
-         (n (length parts)))
-    (cond ((= n 3) 3)
-          ((= n 5) 5)
-          (t nil))))
+  (if rule
+      (let* ((parts (split-string (string-trim rule) "[ \t]+" t))
+             (n (length parts)))
+        (cond ((= n 3) 3)
+              ((= n 5) 5)
+              (t nil)))))
 
 (defun org-repeat-by-cron--normalize-cron-rule (rule)
   "Normalize the cron RULE string to a 5-field format.
@@ -574,16 +575,16 @@ the existing timestamp, and finally the current time.
 Any existing repeater cookie (e.g., '++1w') in the original
 timestamp is ignored and preserved in the new one.
 Upon success, the entry's TODO state is reset to `todo'."
-  (let ((from-state (format "%s" (plist-get change-plist :from)))
-        (to-state (format "%s" (plist-get change-plist :to))))
-    (when (and (not (member from-state org-done-keywords))
-               (member to-state org-done-keywords))
+  (when-let* ((from-state   (format "%s" (plist-get change-plist :from)))
+              (to-state    (format "%s" (plist-get change-plist :to)))
+              (pom          (point))
+              (cron-str     (org-entry-get pom org-repeat-by-cron-cron-prop))
+              (cron-empty-p (not (string-empty-p (string-trim cron-str))))
+              (todo-done-p  (and (not (member from-state org-done-keywords))
+                                 (member to-state org-done-keywords))))
       (save-excursion
         (org-back-to-heading t)
-        (let* ((pom           (point))
-               (cron-str      (org-entry-get pom org-repeat-by-cron-cron-prop))
-               (cron-arity    (org-repeat-by-cron--cron-rule-arity cron-str)))
-          (when (and cron-str (not (string-empty-p (string-trim cron-str))))
+        (let* ((cron-arity    (org-repeat-by-cron--cron-rule-arity cron-str)))
             (if (not cron-arity)
                 (message "[repeat] invalid cron rule: %s" cron-str)
               (let* ((day-and-p     (string= (org-entry-get pom org-repeat-by-cron-day-and-prop) "t"))
@@ -613,7 +614,7 @@ Upon success, the entry's TODO state is reset to `todo'."
                       (org-schedule nil final-ts))
                     (org-entry-put pom org-repeat-by-cron-anchor-prop next-raw)
                     (org-todo 'todo)
-                    (message "[repeat] cron repeat to %s" next-raw)))))))))))
+                    (message "[repeat] cron repeat to %s" next-raw)))))))))
 
 ;;;###autoload
 (define-minor-mode global-org-repeat-by-cron-mode
