@@ -224,6 +224,8 @@ SCHEDULED: <2025-09-15 Mon .+1d/2d>
 提示：在与 =org-habit= 配合的时候，请务必保留类似 =.+1d/2d= 的 Repeater，以便展示 =org-habit= 的彩色graph。
 * 更新日志
 
+** 1.1.1 修复触发条件
+修复了错误触发 =org-repeat-by-cron-on-done= 函数的问题，现在能正确地只在有 =REAPTE_CRON= 属性的heading上触发。
 ** 1.1.0 添加了对于repeater的处理
 1. 现在可以在设置 =REPEAT_CRON= 的同时启用repeater了， =org-repeat-by-cron= 会暂存 =repeater= ，处理重复，设置对应时间并恢复暂存的 =repeater= 。
 2. 一些代码逻辑的优化。

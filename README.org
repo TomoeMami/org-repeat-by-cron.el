@@ -206,6 +206,9 @@ SCHEDULED: <2025-09-15 Mon .+1d/2d>
 
 * Changelog
 
+** 1.1.1 - Logic Fixes
+Bug fix for =org-repeat-by-cron-on-done= trigger logic
+Fixed an issue where =org-repeat-by-cron-on-done= was incorrectly triggered on all headings. The function now correctly filters and only triggers on headings that possess the =REPEAT_CRON= property.
 ** 1.1.0 - Repeater Preservation
 1. Added support for native Org repeaters. =org-repeat-by-cron= now stashes the =repeater=, calculates the new date, and restores the cookie.
 2. Optimized internal logic.
