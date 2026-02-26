@@ -638,7 +638,7 @@ display a message and perform no changes."
                            (org-schedule '(4)))
                   (org-schedule nil final-ts))
                 (org-todo 'todo)
-                (message "[Cron-Repeat] %s repeat to %s" resched-str next-raw)
+                (message "[Cron-Repeat] %s repeat to %s" (if deadline-p "DEADLINE" "SCHEDULED") next-raw)
                 (when deadline-arity
                   (let* ((cron-str deadline-str)
                          (cron-arity deadline-arity)
