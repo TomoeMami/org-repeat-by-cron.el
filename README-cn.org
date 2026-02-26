@@ -248,6 +248,9 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 
 * 更新日志
 
+** 1.1.3 2026-02-26 修复触发条件
+为了保持兼容性，上个版本移除了先前使用的 =when-let*= ，导致再次错误触发 =org-repeat-by-cron-on-done= 函数。
+
 ** 1.1.2 2026-02-26 新增scheduled/deadline并行功能
 - 新增：支持独立的 =DEADLINE= 重复规则。现在 =REPEAT_DEADLINE= 属性可以填入一个独立的 =Cron= 表达式，实现与 =SCHEDULE= 的共存调度。
 - 新增：引入 =REPEAT_DEADLINE_ANCHOR= 用于支持独立截止日期的计算基准。
