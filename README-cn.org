@@ -9,8 +9,8 @@
 不同之处：
 1. 使用elisp实现的一个cron解析器，不依赖python的 =croniter= 包
 2. 取消 =INTERVAL= 属性，改为 =DAY_AND= 属性
-3. 支持切换 =SCHEDULE= 或 =DEADLINE= 。
-4. 兼容 =org-habit= ，接管对应重复处理。
+3. 支持同时或单独更新 =SCHEDULE= 与 =DEADLINE= 时间戳。
+4. 兼容 =org-habit= ，自动接管时间计算并保留 org-habit 的重复 cookie，不破坏习惯追踪图表。。
 
 =org-repeat-by-cron.el= 是一个为 Emacs Org 模式设计的轻量级扩展，它允许您根据强大的 Cron 表达式来重复任务。
 
@@ -23,12 +23,13 @@
 - 使用标准的 5 字段 Cron 表达式（ =分、时、日、月、星期= ）来定义复杂的重复规则。
 - 纯 Elisp 实现，无任何外部依赖，安装简单，运行高效。
 - 支持 Cron 扩展语法：
-  *   =L= ：表示月份或星期的「最后一天」。
-  *   =W= ：表示离指定日期最近的「工作日」。
-  *   =#= ：表示「第 N 个星期 X」，例如 =5#2= 代表第二个星期五。
+  * =L= ：表示月份或星期的「最后一天」。
+  * =W= ：表示离指定日期最近的「工作日」。
+  * =LW= ：表示当月最后一个「工作日」。
+  * =#= ：表示「第 N 个星期 X」，例如 =5#2= 代表第二个星期五。
 - 支持通过 =DAY_AND= 属性切换“日”和“星期”字段的逻辑关系（默认 =OR= ）。
 - 支持月份（ =JAN-DEC= ）和星期（ =SUN-SAT= ）的英文缩写，使表达式更具可读性。
-- 您可以选择让它更新任务的 =SCHEDULED= 时间戳或 =DEADLINE= 时间戳（默认 =SCHEDULED= ）。
+- 您可以选择让它更新任务的 =SCHEDULED= 时间戳或 =DEADLINE= 时间戳，也可以两者均独立更新（默认 =SCHEDULED= ）。
 
 ** 安装与配置
 
@@ -95,8 +96,10 @@ SCHEDULED: <2025-12-14 周日>
 - =REPEAT_DAY_AND= : *（可选）* 默认关闭，设置为 =t= 以开启。用于切换“日”与“星期”的逻辑关系。
   - 默认情况下 (OR): 表达式 =13 * FRI= 会在每月 13 号以及每个周五触发。
   - 开启后 (AND): 表达式 =13 * FRI= 仅在恰好是 13 号的周五触发（例如“黑色星期五”）。
-- =REPEAT_DEADLINE= : *（可选）* 设置为 =t= 时，更新 =DEADLINE= 而非 =SCHEDULED= 。 *注意：* 为了防止冲突，启用此项后会自动清除任务原有的 =SCHEDULED= 时间戳。
-- =REPEAT_ANCHOR= : 由插件自动创建并维护，存储上次触发的时间基准。用户通常不需要手动干预。若现有的该项被删除，则在下次重复时会采用当前时间为基准，并重新计算设置该值。
+- =REPEAT_DEADLINE= : *（可选）*
+  - 设置为 =t= 时，更新 =DEADLINE= 而非 =SCHEDULED= 。 *注意：* 为了防止冲突，启用此项后会自动清除任务原有的 =SCHEDULED= 时间戳。
+  - 设置为 =Cron= 表达式（如 0 18 * * 5）时，开启独立重复模式。 =SCHEDULED= 将按 =REPEAT_CRON= 重复，而 =DEADLINE= 将按此处的表达式和独立的 =REPEAT_DEADLINE_ANCHOR= 单独重复。
+- =REPEAT_ANCHOR= 与 =REPEAT_DEADLINE_ANCHOR= : 由插件自动创建并维护，存储上次触发的时间基准。用户通常不需要手动干预。若现有的该项被删除，则在下次重复时会采用当前时间为基准，并重新计算设置该值。
 *** 工作流程
 
 - 在一个 Org 标题下创建一个 =PROPERTIES= 抽屉。
@@ -113,7 +116,7 @@ SCHEDULED: <2025-12-14 周日>
     
   - 它会根据 =REPEAT_CRON= 规则计算出下一个有效的时间点，忽略掉 =repeater= 的设置（如果有的话）。
     
-  - 更新任务的 =SCHEDULED= 或 =DEADLINE= 时间戳，并恢复 =repeater= （如果有的话）。
+  - 更新任务的 =SCHEDULED= 或 =DEADLINE= 时间戳，又或许两者皆更新，并恢复 =repeater= （如果有的话）。
     
   - 将任务的 =TODO= 状态从 =DONE= 自动重置为 =TODO= （或您的默认初始状态）。
     
@@ -169,7 +172,6 @@ SCHEDULED: <2025-09-12 Fri 17:00>
 :END:
 #+end_src
   
-
 *** 示例 2: 每月账单支付 (最后一天)
 
 在每个月的最后一天提醒支付账单(使用 3 字段格式)。
@@ -206,10 +208,20 @@ SCHEDULED: <2025-10-06 Mon>
 :PROPERTIES:
 :REPEAT_CRON: * JAN,APR,JUL,OCT MON#1
 :END:
-  
 #+end_src
 
-*** 示例 5: 每周固定时间健身（配合 org-habit）
+*** 示例 5: 黑色星期五特惠（ DAY_AND）
+仅在每月 13 号且当天是周五时触发。
+#+begin_src org
+,* TODO 黑色星期五特惠
+SCHEDULED: <2026-03-13 五>
+:PROPERTIES:
+:REPEAT_CRON: 13 * 5
+:REPEAT_DAY_AND: t
+:END:
+#+end_src
+
+*** 示例 6: 每周固定时间健身（配合 org-habit）
 假设你想在 每周一、三、五 健身，并且希望在 Agenda 中看到习惯追踪条，要求最晚不能拖延超过 2 天。
 
 #+begin_src org
@@ -222,26 +234,44 @@ SCHEDULED: <2025-09-15 Mon .+1d/2d>
 #+end_src
 
 提示：在与 =org-habit= 配合的时候，请务必保留类似 =.+1d/2d= 的 Repeater，以便展示 =org-habit= 的彩色graph。
+
+*** 示例 7: 独立双重时间戳 （REPEAT_DEADLINE）
+假设你有一个每周任务，它应在每周五到期，但你会安排在周四有空时完成。
+#+begin_src org
+,* TODO 周度重点项目
+SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
+:PROPERTIES:
+:REPEAT_CRON: * * 4
+:REPEAT_DEADLINE: * * FRI
+:END:
+#+end_src
+
 * 更新日志
 
-** 1.1.1 修复触发条件
+** 1.1.2 2026-02-26 新增scheduled/deadline并行功能
+- 新增：支持独立的 =DEADLINE= 重复规则。现在 =REPEAT_DEADLINE= 属性可以填入一个独立的 =Cron= 表达式，实现与 =SCHEDULE= 的共存调度。
+- 新增：引入 =REPEAT_DEADLINE_ANCHOR= 用于支持独立截止日期的计算基准。
+- 优化：内部代码重构。
+
+** 1.1.1 2026-02-25 修复触发条件
 修复了错误触发 =org-repeat-by-cron-on-done= 函数的问题，现在能正确地只在有 =REAPTE_CRON= 属性的heading上触发。
-** 1.1.0 添加了对于repeater的处理
+** 1.1.0 2026-02-24 添加了对于repeater的处理
 1. 现在可以在设置 =REPEAT_CRON= 的同时启用repeater了， =org-repeat-by-cron= 会暂存 =repeater= ，处理重复，设置对应时间并恢复暂存的 =repeater= 。
 2. 一些代码逻辑的优化。
 
-** 1.0.5 修复了1个问题
+** 1.0.5 2026-02-02 修复了1个问题
 若下列条件按顺序有任一满足，则会将时间戳显示为包含小时分钟的格式（"%Y-%m-%d %a %H:%M"）：
 1. cron格式为5字段，暗示了需要小时分钟；
 2. anchor-str中包含了小时与分钟（"HH:MM"）
 3. scheduled或deadline的时间戳中包含了小时与分钟（"HH:MM"）
 
-** 1.0.4 修复了1个问题
+** 1.0.4 2026-01-18 修复了1个问题
 调整了字符L和数字的顺序，由 =L5= 变为 =5L= ，以保持与[[https://en.wikipedia.org/wiki/Cron#Non-standard_characters][cron规则]]的一致性
-** 1.0.3 更新Commentary
+** 1.0.3 2025-12-25 更新Commentary
 
-** 1.0.2 修复了2个问题
+** 1.0.2 2025-10-28 修复了2个问题
 1. 现在比较时会正确采用 =base-time= 和 =current-time= 中较大一方
 2. 把默认的触发hook由 =org-after-todo-state-change-hook= 改为 =org-trigger-hook= ，以便更好处理相关函数
 
-** 1.0.1 更新README
+** 1.0.1 2025-09-22 更新README
+** 1.0.0 2025-09-21 初始化

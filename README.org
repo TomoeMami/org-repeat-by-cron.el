@@ -11,7 +11,7 @@ Modified from [[https://github.com/Raemi/org-reschedule-by-rule][org-reschedule-
 ** Key Differences
 1. *Pure Elisp Parser*: Implemented in pure Elisp with no dependency on external Python packages like =croniter=.
 2. *Logic Control*: Replaces the =INTERVAL= property with =DAY_AND= for sophisticated date matching (AND/OR logic for DOM and DOW).
-3. *Flexible Timestamps*: Supports toggling between updating =SCHEDULED= or =DEADLINE= timestamps.
+3. *Dual Timestamp Support* : Supports independent rescheduling for both =SCHEDULED= and =DEADLINE= timestamps simultaneously.
 4. *Org Habit Compatibility*: Fully compatible with =org-habit=; it takes over rescheduling while preserving the habit's consistency graph.
 
 =org-repeat-by-cron.el= is a lightweight extension for Emacs Org-mode that allows you to repeat tasks using the power of Cron expressions.
@@ -27,10 +27,11 @@ A core advantage is its pure Elisp implementation, ensuring it works out-of-the-
 - Supports advanced Cron extensions:
   - =L=: Represents the "Last" day of the month or the last specific weekday of the month.
   - =W=: Represents the "Nearest Weekday" (Mon-Fri) to a specific date.
+  - =LW= : "Last Weekday" of the month.
   - =#=: Represents the "Nth weekday of the month" (e.g., =5#2= for the second Friday).
 - Toggle logic for "Day of Month" and "Day of Week" fields using the =DAY_AND= property (defaults to =OR=).
 - Supports English aliases for months (=JAN-DEC=) and days (=SUN-SAT=) for better readability.
-- Choose whether to update the =SCHEDULED= or =DEADLINE= timestamp (defaults to =SCHEDULED=).
+- You can choose to let it update the task's =SCHEDULED= timestamp or =DEADLINE= timestamp, or update both independently (default is =SCHEDULED= ).
 
 ** Installation & Configuration
 
@@ -94,8 +95,10 @@ SCHEDULED: <2025-12-14 Sun>
 - =REPEAT_DAY_AND=: *(Optional)* Defaults to nil (logic =OR=). Set to =t= to enable =AND= logic.
   - *OR (Default)*: =13 * FRI= triggers on the 13th of the month AND every Friday.
   - *AND (Set to t)*: =13 * FRI= triggers only on Friday the 13th.
-- =REPEAT_DEADLINE=: *(Optional)* Set to =t= to update the =DEADLINE= instead of =SCHEDULED=. *Note:* To prevent conflicts, enabling this will automatically clear any existing =SCHEDULED= timestamp.
-- =REPEAT_ANCHOR=: Automatically maintained by the plugin to store the last trigger base time. Users usually don't need to edit this. If deleted, the plugin will use the current time as the base for the next calculation.
+- =REPEAT_DEADLINE=: *(Optional)*
+  - If set to *t* : The Cron rule in =REPEAT_CRON= updates the =DEADLINE= instead of =SCHEDULED= . (Existing =SCHEDULED= timestamps are cleared to prevent conflicts).
+  - If set to a *Cron expression* (e.g. =0 18 * * 5= ): Enable independent repetition mode. The =SCHEDULED= time follows =REPEAT_CRON= , while the =DEADLINE= follows this specific expression.
+- =REPEAT_ANCHOR= & =REPEAT_DEADLINE_ANCHOR= : Automatically maintained by the plugin to store the last trigger base time. Users usually don't need to edit this. If deleted, the plugin will use the current time as the base for the next calculation.
 
 *** Workflow
 
@@ -106,6 +109,7 @@ SCHEDULED: <2025-12-14 Sun>
 5. *Automatically*:
    - =org-repeat-by-cron= captures the state change and preserves any existing =repeater= (e.g., =.+1d/2d=).
    - It calculates the next valid time based on =REPEAT_CRON=, ignoring the internal Org repeater for date calculation.
+   - Update the task's =SCHEDULED= or =DEADLINE= timestamp, or perhaps update both, and restore the =repeater= (if any).
    - Updates the timestamp, restores the =repeater= cookie, and resets the state back to =TODO=.
 
 *Note:* When used with =org-habit=, the =repeater-cookie= is preserved to ensure the habit consistency graph (the colored bar) continues to function, while =org-repeat-by-cron= handles the actual rescheduling logic.
@@ -191,8 +195,19 @@ SCHEDULED: <2025-10-06 Mon>
 :REPEAT_CRON: * JAN,APR,JUL,OCT MON#1
 :END:
 #+end_src
+*** 5. Black Friday Special (DAY_AND)
 
-*** 5. Gym Schedule (with org-habit)
+Only triggers when the month is the 13th and that day is Friday.
+
+#+begin_src org
+,* TODO Black Friday Special
+SCHEDULED: <2026-03-13 Fri>
+:PROPERTIES:
+:REPEAT_CRON: 13 * 5
+:REPEAT_DAY_AND: t
+:END:
+#+end_src
+*** 6. Gym Schedule (with org-habit)
 Workout Mon, Wed, Fri. Show habit tracking bars in Agenda, allowing a 2-day delay.
 #+begin_src org
 ,* TODO Strength Training
@@ -203,28 +218,47 @@ SCHEDULED: <2025-09-15 Mon .+1d/2d>
 :END:
 #+end_src
 *Note:* Always keep a repeater like =.+1d/2d= when using =org-habit= to preserve the consistency graph.
+*** 7. Independent Dual Timestamps (New in 1.1.2)
+Suppose you have a weekly task, it should be due every Friday, but you will arrange to complete it on Thursday when free.
+
+#+begin_src org
+,* TODO Weekly Key Project
+SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
+:PROPERTIES:
+:REPEAT_CRON: * * 4
+:REPEAT_DEADLINE: * * FRI
+:END:
+#+end_src
 
 * Changelog
-
-** 1.1.1 - Logic Fixes
+** 1.1.2 - 2026-02-26 New scheduled/deadline parallel option
+- New: Supports independent =DEADLINE= repeat rules. Now the =REPEAT_DEADLINE= property can be filled with an independent =Cron= expression, realizing co-existence scheduling with =SCHEDULE=.
+- New: Introduced =REPEAT_DEADLINE_ANCHOR= to support the calculation baseline for independent deadlines.
+- Optimization: Internal code refactoring.
+** 1.1.1 - 2026-02-25 Logic Fixes
 Bug fix for =org-repeat-by-cron-on-done= trigger logic
 Fixed an issue where =org-repeat-by-cron-on-done= was incorrectly triggered on all headings. The function now correctly filters and only triggers on headings that possess the =REPEAT_CRON= property.
-** 1.1.0 - Repeater Preservation
+** 1.1.0 - 2026-02-24 Repeater Preservation
 1. Added support for native Org repeaters. =org-repeat-by-cron= now stashes the =repeater=, calculates the new date, and restores the cookie.
 2. Optimized internal logic.
 
-** 1.0.5 - Timestamp Formatting
+** 1.0.5 - 2026-02-02 Timestamp Formatting
 The rescheduled timestamp will include a time component (format  =%Y-%m-%d %a %H:%M= ) if any of the following conditions are met (evaluated in a logical =OR= sequence):
 1. 5-field Cron: The =REPEAT_CRON= rule has 5 fields, implying a specific time is intended.
 2. Time in Anchor: The =REPEAT_ANCHOR= property already contains a time string ( =HH:MM= ).
 3. Time in existing timestamp: The current =SCHEDULED= or =DEADLINE= timestamp already contains a time string.
 
-** 1.0.4 - Syntax Consistency
+** 1.0.4 - 2026-01-18 Syntax Consistency
 Changed the sequence of =L= and numbers from =L5= to =5L= to align with [[https://en.wikipedia.org/wiki/Cron#Non-standard_characters][standard Cron conventions]].
 
-** 1.0.2 - Logic Fixes
+** 1.0.3 - 2025-12-25 Update Commentary
+
+** 1.0.2 - 2025-10-28 Logic Fixes
 1. Correctly compares =base-time= and =current-time= to ensure forward scheduling.
 2. Switched the default trigger hook from =org-after-todo-state-change-hook= to =org-trigger-hook= for better compatibility.
 
-** 1.0.1 - Initial Release
-Updated README and basic functionality.
+** 1.0.1 - 2025-09-22 Update README
+Updated README 
+
+** 1.0.0 - 2025-09-21 Initial Release
+basic functionality.
