@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.2
+;; Version: 1.1.3
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -594,7 +594,8 @@ display a message and perform no changes."
          (to-state (format "%s" (plist-get change-plist :to)))
          (pom (point))
          (cron-str (org-entry-get pom org-repeat-by-cron-cron-prop)))
-    (when (and (not (string-empty-p (string-trim cron-str)))
+    (when (and cron-str
+               (not (string-empty-p (string-trim cron-str)))
                (not (member from-state org-done-keywords))
                (member to-state org-done-keywords))
       (save-excursion
