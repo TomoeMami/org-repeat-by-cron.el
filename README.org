@@ -12,7 +12,7 @@ Modified from [[https://github.com/Raemi/org-reschedule-by-rule][org-reschedule-
 1. *Pure Elisp Parser*: Implemented in pure Elisp with no dependency on external Python packages like =croniter=.
 2. *Logic Control*: Replaces the =INTERVAL= property with =DAY_AND= for sophisticated date matching (AND/OR logic for DOM and DOW).
 3. *Dual Timestamp Support* : Supports independent rescheduling for both =SCHEDULED= and =DEADLINE= timestamps simultaneously.
-4. *Org Habit Compatibility*: Fully compatible with =org-habit=; it takes over rescheduling while preserving the habit's consistency graph.
+4. *Maximum Compatibility*: Specifically designed to work with =org-habit= . It allows Org-mode to handle the repeat process natively, then automatically recalculating and setting the precise date based on Cron rules.
 
 =org-repeat-by-cron.el= is a lightweight extension for Emacs Org-mode that allows you to repeat tasks using the power of Cron expressions.
 
@@ -107,12 +107,12 @@ SCHEDULED: <2025-12-14 Sun>
 3. (Optional) Add =REPEAT_DAY_AND= or =REPEAT_DEADLINE=.
 4. Change the task state to =DONE= as usual.
 5. *Automatically*:
-   - =org-repeat-by-cron= captures the state change and preserves any existing =repeater= (e.g., =.+1d/2d=).
-   - It calculates the next valid time based on =REPEAT_CRON=, ignoring the internal Org repeater for date calculation.
-   - Update the task's =SCHEDULED= or =DEADLINE= timestamp, or perhaps update both, and restore the =repeater= (if any).
-   - Updates the timestamp, restores the =repeater= cookie, and resets the state back to =TODO=.
+   - =org-repeat-by-cron= captures the state change and provides a temporary repeater to let Org-mode handle standard procedures (logging, keywords, etc.).
+   - org-mode itself handles the repetition event.
+   - =org-repeat-by-cron= then recalculates the next valid time based on the Cron rules.
+   - It updates the task's =SCHEDULED= or =DEADLINE= timestamp (or both) and removes the temporary repeater.
 
-*Note:* When used with =org-habit=, the =repeater-cookie= is preserved to ensure the habit consistency graph (the colored bar) continues to function, while =org-repeat-by-cron= handles the actual rescheduling logic.
+*Note:* Because the repetition is processed by Org-mode, this package is fully compatible with =org-habit= .
 
 ** Cron Syntax
 
@@ -181,7 +181,7 @@ Meetings held on the 1st and 3rd Monday of the month.
 ,* TODO Bi-weekly Sync Meeting
 DEADLINE: <2025-10-06 Mon 10:00>
 :PROPERTIES:
-:REPEAT_CRON: 0 10 * MON#1,MON#3
+:REPEAT_CRON: 0 10 * * MON#1,MON#3
 :REPEAT_DEADLINE: t
 :END:
 #+end_src
@@ -232,6 +232,9 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 
 * Changelog
 
+** 1.1.4 - 2026-02-27 Logic Update
+Updated internal logic to use temporary repeaters.
+This allows =org-mode= to natively handle todo-keywords and org-log, avoiding compatibility issues. The package now only resets timestamps after Org finishes its processing.
 ** 1.1.3 - 2026-02-26 Bug fix for =org-repeat-by-cron-on-done= trigger logic
 To maintain compatibility, the previous version removed the previously used =when-let*=, which inadvertently triggered the =org-repeat-by-cron-on-done= function again.
 

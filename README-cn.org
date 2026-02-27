@@ -10,7 +10,7 @@
 1. 使用elisp实现的一个cron解析器，不依赖python的 =croniter= 包
 2. 取消 =INTERVAL= 属性，改为 =DAY_AND= 属性
 3. 支持同时或单独更新 =SCHEDULE= 与 =DEADLINE= 时间戳。
-4. 兼容 =org-habit= ，自动接管时间计算并保留 org-habit 的重复 cookie，不破坏习惯追踪图表。。
+4. 兼容 =org-habit= ，让org自行处理重复的同时，自动重新计算并设置时间，最大化兼容 org-habit 等。
 
 =org-repeat-by-cron.el= 是一个为 Emacs Org 模式设计的轻量级扩展，它允许您根据强大的 Cron 表达式来重复任务。
 
@@ -112,15 +112,12 @@ SCHEDULED: <2025-12-14 周日>
   
 - *自动发生* :
   
-  - =org-repeat-by-cron= 会捕获到状态变更，并暂存 =repeater= （如果有的话）。
+  - =org-repeat-by-cron= 会捕获到状态变更，并为该任务临时补全可能缺失的 =repeater= 相关文本
+  - =org-mode= 自行处理重复事件，设置下一个有效时间点。
+  - =org-repeat-by-cron= 根据 =REPEAT_CRON= 规则计算出下一个有效的时间点    
+  - 根据计算出来的时间点，对应更新任务的 =SCHEDULED= 或 =DEADLINE= 时间戳，又或许两者皆更新，并删除掉临时补全的 =repeater= 。
     
-  - 它会根据 =REPEAT_CRON= 规则计算出下一个有效的时间点，忽略掉 =repeater= 的设置（如果有的话）。
-    
-  - 更新任务的 =SCHEDULED= 或 =DEADLINE= 时间戳，又或许两者皆更新，并恢复 =repeater= （如果有的话）。
-    
-  - 将任务的 =TODO= 状态从 =DONE= 自动重置为 =TODO= （或您的默认初始状态）。
-    
-提示：如果将 =org-repeat-by-cron= 与内置的 =org-repeater= 标记同时使用，则会暂存并忽略 =repeater= ，由 =REPEAT_CRON= 控制下次重复的时间点，恢复旧有的 =repeater= 。这意味着可以与 =org-habit= 同时启用，在保留 =repeater-cookie= 不变的同时，由 =org-repeat-by-cron= 接管日期计算， =repeater-cookie= 负责触发 Habit 属性（如进度条）。
+提示：由于重复事项由org-mode自行处理， =org-repeat-by-cron= 仅会在org处理重复完成后重新设置时间戳，所以本package可以与 =org-habit= 同时启用。
 
 ** Cron 语法详解
 
@@ -192,10 +189,9 @@ SCHEDULED: <2025-09-30 Tue>
 ,* TODO 参加双周技术同步会
 DEADLINE: <2025-10-06 Mon 10:00>
 :PROPERTIES:
-:REPEAT_CRON: 0 10  * MON#1,MON#3
+:REPEAT_CRON: 0 10 * * MON#1,MON#3
 :REPEAT_DEADLINE: t
 :END:
-  
 #+end_src
   
 *** 示例 4: 季度维护任务
@@ -247,6 +243,10 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * 更新日志
+
+** 1.1.4 2026-02-27 更新内部逻辑
+现在会通过添加临时repeater的方式让org-mode来处理todo-keywords、org-log-done等情况，以规避可能的兼容性问题。
+本package仅会在org自行处理完后重新设定对应时间。
 
 ** 1.1.3 2026-02-26 修复触发条件
 为了保持兼容性，上个版本移除了先前使用的 =when-let*= ，导致再次错误触发 =org-repeat-by-cron-on-done= 函数。

@@ -1,3 +1,4 @@
+
 ;;; org-repeat-by-cron.el --- An Org mode task repeater based on Cron expressions -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 TomoeMami
@@ -8,7 +9,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.3
+;; Version: 1.1.4
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -36,8 +37,7 @@
 ;;   no dependency on the Python croniter package.
 ;; - Replaces the INTERVAL property with a DAY_AND property.
 ;; - Supports toggling between SCHEDULED and DEADLINE timestamps.
-;; - Fully compatible with org-habit; it takes over rescheduling
-;;   while preserving the habit's consistency graph.
+;; - Fully compatible with org-habit.
 ;; 
 ;; org-repeat-by-cron.el is a lightweight extension for Emacs Org
 ;; mode that allows you to repeat tasks using the power of Cron expressions.
@@ -562,110 +562,201 @@ date-only format string (\"%Y-%m-%d %a\")."
 Return the match (e.g., \"+1d\", \"++2w\", or \".1m/3d\") if found,
 otherwise nil."
   (when (and ts-str
-             (string-match "\\s-*\\([.+]\\{1,2\\}[0-9]+[hdwmy]\\(?:/[0-9]+[hdwmy]\\)?\\)" ts-str))
+             (string-match org-repeat-re ts-str))
     (match-string 1 ts-str)))
 
+(defvar org-repeat-by-cron--repeater-raw nil
+  "Symbol indicating which timestamps contain native Org repeater cookies.
+
+This variable tracks whether SCHEDULED or DEADLINE timestamps
+of the current entry had a native repeater (e.g., \"+1d\") before
+cron rescheduling. It is used to determine if existing cookies
+should be preserved to maintain compatibility with `org-habit'.
+Possible values are 'schedule' , 'deadline', 'both', or nil.")
+
+(defun org-repeat-by-cron--ensure-repeater ()
+  "Ensure the current Org entry has a repeater cookie for cron repetition.
+
+This function is called by `org-after-todo-state-change-hook' to ensure that
+entries using `org-repeat-by-cron' are recognized as repeating tasks.
+It adds a temporary repeater cookie if none is present, ensuring
+`org-trigger-hook' is run and `org-habit' consistency is maintained."
+  (save-excursion
+    (org-back-to-heading t)
+    (let* ((pom (point))
+           (cron-str (org-entry-get pom org-repeat-by-cron-cron-prop))
+           (cron-arity (org-repeat-by-cron--cron-rule-arity cron-str)))
+      (when (and cron-str (not (string-empty-p (string-trim cron-str)))
+                 ;; org-state dynamically bound in org.el/org-todo
+                 (member org-state org-done-keywords))
+        (if (not cron-arity)
+            (message "[Cron-Repeat] Invalid cron rule: %s" cron-str)
+          (let* ((deadline-prop (org-entry-get pom org-repeat-by-cron-deadline-prop))
+                 (process-deadline nil)
+                 (process-schedule nil))
+
+            (cond
+             ((string= deadline-prop "t")
+              (setq process-deadline t))
+             ((org-repeat-by-cron--cron-rule-arity deadline-prop)
+              (setq process-deadline t)
+              (setq process-schedule t))
+             (t
+              (setq process-schedule t)))
+            
+            (let ((sched-has-rep nil)
+                  (dead-has-rep nil))
+              (when process-schedule
+                (let* ((ts-str (org-entry-get pom "SCHEDULED"))
+                       (has-ts (and ts-str (not (string-empty-p ts-str))))
+                       (repeater (and has-ts (org-repeat-by-cron--extract-repeater ts-str))))
+                  (cond
+                   (repeater
+                    (setq sched-has-rep t))
+                   ;; a timestamp without repeater，add a temp repeater "+1d"
+                   (has-ts
+                    (let ((new-ts-str (if (string-match-p "\\([>]\\|\\]\\)$" ts-str)
+                                          (replace-regexp-in-string "\\([>]\\|\\]\\)$" " +1d\\1" ts-str)
+                                        (concat ts-str " +1d"))))
+                      (org-schedule nil new-ts-str)))
+                   ;; when no timestamp, create one
+                   (t
+                    (let* ((arity (org-repeat-by-cron--cron-rule-arity cron-str))
+                           (fmt (if (eq arity 5) "%Y-%m-%d %a %H:%M +1d" "%Y-%m-%d %a +1d"))
+                           (new-ts-str (format-time-string fmt (current-time))))
+                      (org-schedule nil new-ts-str))))))
+            (when process-deadline
+              (let* ((ts-str (org-entry-get pom "DEADLINE"))
+                     (has-ts (and ts-str (not (string-empty-p ts-str))))
+                     (repeater (and has-ts (org-repeat-by-cron--extract-repeater ts-str)))
+                     (cron-val (if (string= deadline-prop "t") cron-str deadline-prop)))
+                (cond
+                 (repeater
+                  (setq dead-has-rep t))
+                 ;; a timestamp without repeater，add a temp repeater "+1d"
+                 (has-ts
+                  (let ((new-ts-str (if (string-match-p "\\([>]\\|\\]\\)$" ts-str)
+                                        (replace-regexp-in-string "\\([>]\\|\\]\\)$" " +1d\\1" ts-str)
+                                      (concat ts-str " +1d"))))
+                    (org-deadline nil new-ts-str)))
+                 ;; when no timestamp, create one
+                 (t
+                  (let* ((arity (org-repeat-by-cron--cron-rule-arity cron-val))
+                         (fmt (if (eq arity 5) "%Y-%m-%d %a %H:%M +1d" "%Y-%m-%d %a +1d"))
+                         (new-ts-str (format-time-string fmt (current-time))))
+                    (org-deadline nil new-ts-str))))))
+            
+            ;; 4. set org-repeat-by-cron--repeater-raw
+            (setq org-repeat-by-cron--repeater-raw
+                  (cond
+                   ((and sched-has-rep dead-has-rep) 'both)
+                   (sched-has-rep 'schedule)
+                   (dead-has-rep 'deadline)
+                   (t nil))))))))))
+
+
 (defun org-repeat-by-cron-on-done (change-plist)
-  "Reschedule an Org entry based on cron rules when it is marked DONE.
+  "Reschedule the Org task at point according to CHANGE-PLIST and cron rules.
 
-This function is intended for use in `org-trigger-hook'.  It examines
-CHANGE-PLIST to determine if the task transitioned from a non-done
-state to a done state as defined by `org-done-keywords'.
-
-If the entry has a cron property defined by the user option
-`org-repeat-by-cron-cron-prop', this function calculates the next
-matching time using `org-repeat-by-cron-next-time'.  The calculation
-uses the following precedence for the base time:
-  1. The value of `org-repeat-by-cron-anchor-prop'.
-  2. The current SCHEDULED or DEADLINE timestamp.
-  3. The current system time.
-
-Once the next time is determined, this function:
-  - Updates the anchor property with the new raw timestamp.
-  - Reschedules the entry using `org-schedule' or `org-deadline'.
-  - Reverts the entry to the `todo' state.
-  - Preserves existing Org repeater cookies (e.g., \\=\"+1d\\=\").
-
-If `org-repeat-by-cron-deadline-prop' is also configured, the
-function independently handles the deadline repetition logic.  If a
-valid time cannot be found within `org-repeat-by-cron-max-search-year',
-display a message and perform no changes."
-  (let* ((from-state (format "%s" (plist-get change-plist :from)))
-         (to-state (format "%s" (plist-get change-plist :to)))
+This function is intended for `org-trigger-hook'. It reads the cron rule from
+ the property named by the variable `org-repeat-by-cron-cron-prop'.
+It then calculates the next occurrence after the current time or anchor time
+and updates the SCHEDULED or DEADLINE timestamps. The anchor property
+is also updated to ensure consistent calculation for the next repetition."
+  (let* ((from-str (format "%s" (plist-get change-plist :from)))
+         (to-str (format "%s" (plist-get change-plist :to)))
          (pom (point))
          (cron-str (org-entry-get pom org-repeat-by-cron-cron-prop)))
     (when (and cron-str
                (not (string-empty-p (string-trim cron-str)))
-               (not (member from-state org-done-keywords))
-               (member to-state org-done-keywords))
+               (not (member from-str org-done-keywords))
+               (member to-str org-done-keywords))
       (save-excursion
         (org-back-to-heading t)
         (let ((cron-arity (org-repeat-by-cron--cron-rule-arity cron-str)))
           (if (not cron-arity)
               (message "[Cron-Repeat] Invalid cron rule: %s" cron-str)
-            (cl-labels ((update-anchor-return-cons (pom cron-str cron-arity anchor-str repeat-time resched-str)
-                          (let* ((day-and-p (string= (org-entry-get pom org-repeat-by-cron-day-and-prop) "t"))
-                                 (now (current-time))
-                                 (base-time (or (and anchor-str (org-time-string-to-time anchor-str))
-                                                repeat-time
-                                                now))
-                                 (next (org-repeat-by-cron-next-time (org-repeat-by-cron--normalize-cron-rule cron-str)
-                                                                     (if (time-less-p base-time now) now base-time)
-                                                                     day-and-p))
-                                 (fmt (org-repeat-by-cron--reschedule-use-time-p
-                                       anchor-str cron-arity resched-str))
-                                 (next-raw (format-time-string fmt next))
-                                 (repeater-cookie (org-repeat-by-cron--extract-repeater resched-str)))
-                            (if next
-                                (progn (org-entry-put pom org-repeat-by-cron-anchor-prop next-raw)
-                                       (cons next-raw
-                                        (if repeater-cookie
-                                           (concat next-raw " " repeater-cookie)
-                                         next-raw)))
-                              (message "[Cron-Repeat] Cannot find valid time before %s" (+ (nth 5 (decode-time)) 50))
-                              nil))))
-              (let* ((deadline-str (org-entry-get pom org-repeat-by-cron-deadline-prop))
-                     (deadline-p (string= deadline-str "t"))
-                     (repeat-time (if deadline-p (org-get-deadline-time pom) (org-get-scheduled-time pom)))
-                     (anchor-str (org-entry-get pom org-repeat-by-cron-anchor-prop))
-                     (resched-str (org-entry-get pom (if deadline-p "DEADLINE" "SCHEDULED")))
-                     (deadline-arity (org-repeat-by-cron--cron-rule-arity deadline-str))
-                     (result-cons (update-anchor-return-cons pom cron-str cron-arity anchor-str repeat-time resched-str))
-                     (next-raw (car result-cons))
-                     (final-ts (cdr result-cons)))
-                (if deadline-p
-                    (progn (org-deadline nil final-ts)
-                           (org-schedule '(4)))
-                  (org-schedule nil final-ts))
-                (org-todo 'todo)
-                (message "[Cron-Repeat] %s repeat to %s" (if deadline-p "DEADLINE" "SCHEDULED") next-raw)
-                (when deadline-arity
-                  (let* ((cron-str deadline-str)
-                         (cron-arity deadline-arity)
-                         (anchor-str (org-entry-get pom org-repeat-by-cron-deadline-anchor-prop))
-                         (repeat-time (org-get-deadline-time pom))
-                         (resched-str (org-entry-get pom "DEADLINE"))
-                         (org-repeat-by-cron-anchor-prop org-repeat-by-cron-deadline-anchor-prop)
-                         (result-cons (update-anchor-return-cons pom cron-str cron-arity anchor-str repeat-time resched-str))
-                         (next-raw (car result-cons))
-                         (final-ts (cdr result-cons)))
-                    (org-deadline nil final-ts)
-                    (message "[Cron-Repeat] DEADLINE repeat to %s" next-raw)))))))))))
+            (let* ((deadline-prop (org-entry-get pom org-repeat-by-cron-deadline-prop))
+                   (process-deadline nil)
+                   (process-schedule nil)
+                   (keep-sched (memq org-repeat-by-cron--repeater-raw '(both schedule)))
+                   (keep-dead  (memq org-repeat-by-cron--repeater-raw '(both deadline))))
+              
+              (cond
+               ;; REPEAT_DEADLINE is t，only deadline
+               ((string= deadline-prop "t")
+                (setq process-deadline t))
+               ;; REPEAT_DEADLINE as cron ，deal with deadline and schedule
+               ((org-repeat-by-cron--cron-rule-arity deadline-prop)
+                (setq process-deadline t)
+                (setq process-schedule t))
+               ;; nil or other, only schedule
+               (t
+                (setq process-schedule t)))
+
+              (cl-labels ((calc-next-ts (cron-val anchor-prop time-type)
+                            "Internal func, calculate the next timestamp, update anchor, and return time-string"
+                            (let* ((anchor-str (org-entry-get pom anchor-prop))
+                                   (day-and-p (string= (org-entry-get pom org-repeat-by-cron-day-and-prop) "t"))
+                                   (now (current-time))
+                                   (current-ts-str (org-entry-get pom (if (eq time-type 'deadline) "DEADLINE" "SCHEDULED")))
+                                   (repeat-time (if (eq time-type 'deadline)
+                                                    (org-get-deadline-time pom)
+                                                  (org-get-scheduled-time pom)))
+                                   (base-time (or (and anchor-str (org-time-string-to-time anchor-str))
+                                                  repeat-time
+                                                  now))
+                                   (next (org-repeat-by-cron-next-time
+                                          (org-repeat-by-cron--normalize-cron-rule cron-val)
+                                          (if (time-less-p base-time now) now base-time)
+                                          day-and-p))
+                                   (c-arity (org-repeat-by-cron--cron-rule-arity cron-val))
+                                   (fmt (org-repeat-by-cron--reschedule-use-time-p anchor-str c-arity current-ts-str)))
+                              (if next
+                                  (let ((next-raw (format-time-string fmt next)))
+                                    (org-entry-put pom anchor-prop next-raw)
+                                    next-raw)
+                                (message "[Cron-Repeat] Cannot find valid time before %s"
+                                         (+ (nth 5 (decode-time)) org-repeat-by-cron-max-search-year))
+                                nil))))
+
+                ;; 2. Schedule
+                (when process-schedule
+                  (let ((res (calc-next-ts cron-str org-repeat-by-cron-anchor-prop 'schedule)))
+                    (when res
+                      (message "test repeater %s" res)
+                      (unless keep-sched (org-schedule '(4)))
+                      (org-schedule nil res)
+                      (message "[Cron-Repeat] SCHEDULED repeat to %s" res))))
+
+                ;; 3. Deadline
+                (when process-deadline
+                  (let* ((is-t (string= deadline-prop "t"))
+                         (d-cron (if is-t cron-str deadline-prop))
+                         (d-anchor-prop (if is-t org-repeat-by-cron-anchor-prop org-repeat-by-cron-deadline-anchor-prop))
+                         (res (calc-next-ts d-cron d-anchor-prop 'deadline)))
+                    (when res
+                      (unless keep-dead (org-deadline '(4)))
+                      (org-deadline nil res)
+                      (message "[Cron-Repeat] DEADLINE repeat to %s"  res))))))))))))
 
 ;;;###autoload
 (define-minor-mode global-org-repeat-by-cron-mode
-  "A global minor mode globally enable org-repeat-by-cron.
+  "Toggle global cron-style task repetition in Org mode.
 
-When enabled, completing an Org task with a cron property will
-automatically reschedule it to the next matching occurrence by
-adding `org-repeat-by-cron-on-done' to `org-trigger-hook'."
+When enabled, tasks with a REPEAT_CRON property will automatically
+reschedule themselves to the next occurrence matching the cron
+expression when marked as DONE. This mode adds functions
+to `org-trigger-hook' and `org-after-todo-state-change-hook'."
   :init-value nil
   :global t
   :group 'org-repeat-by-cron
   (if global-org-repeat-by-cron-mode
-      (add-hook 'org-trigger-hook #'org-repeat-by-cron-on-done)
-    (remove-hook 'org-trigger-hook #'org-repeat-by-cron-on-done)))
+      (progn
+        (add-hook 'org-trigger-hook #'org-repeat-by-cron-on-done)
+        (add-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron--ensure-repeater))
+    (remove-hook 'org-trigger-hook #'org-repeat-by-cron-on-done)
+    (remove-hook 'org-after-todo-state-change-hook #'org-repeat-by-cron--ensure-repeater)))
 
 (provide 'org-repeat-by-cron)
-
 ;;; org-repeat-by-cron.el ends here
