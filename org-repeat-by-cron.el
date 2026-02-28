@@ -1,4 +1,3 @@
-
 ;;; org-repeat-by-cron.el --- An Org mode task repeater based on Cron expressions -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 TomoeMami
@@ -572,7 +571,7 @@ This variable tracks whether SCHEDULED or DEADLINE timestamps
 of the current entry had a native repeater (e.g., \"+1d\") before
 cron rescheduling. It is used to determine if existing cookies
 should be preserved to maintain compatibility with `org-habit'.
-Possible values are 'schedule' , 'deadline', 'both', or nil.")
+Possible values are schedule , deadline, both, or nil.")
 
 (defun org-repeat-by-cron--ensure-repeater ()
   "Ensure the current Org entry has a repeater cookie for cron repetition.
@@ -695,7 +694,8 @@ is also updated to ensure consistent calculation for the next repetition."
                 (setq process-schedule t)))
 
               (cl-labels ((calc-next-ts (cron-val anchor-prop time-type)
-                            "Internal func, calculate the next timestamp, update anchor, and return time-string"
+                            "Internal func, calculate the next timestamp, update anchor,
+ and return time-string"
                             (let* ((anchor-str (org-entry-get pom anchor-prop))
                                    (day-and-p (string= (org-entry-get pom org-repeat-by-cron-day-and-prop) "t"))
                                    (now (current-time))
