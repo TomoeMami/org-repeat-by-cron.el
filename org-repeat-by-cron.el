@@ -724,7 +724,6 @@ is also updated to ensure consistent calculation for the next repetition."
                 (when process-schedule
                   (let ((res (calc-next-ts cron-str org-repeat-by-cron-anchor-prop 'schedule)))
                     (when res
-                      (message "test repeater %s" res)
                       (unless keep-sched (org-schedule '(4)))
                       (org-schedule nil res)
                       (message "[Cron-Repeat] SCHEDULED repeat to %s" res))))
