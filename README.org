@@ -232,6 +232,12 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 
 * Changelog
 
+** 1.1.6 2026-03-03 Bug fix
+Since the schedule/deadline timestamps obtained during rescheduling are from after the repetition was executed, they have been excluded from the base-time source to prevent the base-time from being incorrectly postponed.
+
+** 1.1.5 2026-03-03 Bug fix
+Fixed the issue where temporary repeaters could not be correctly created when there were no schedule/deadline timestamps.
+
 ** 1.1.4 - 2026-02-27 Logic Update
 Updated internal logic to use temporary repeaters.
 This allows =org-mode= to natively handle todo-keywords and org-log, avoiding compatibility issues. The package now only resets timestamps after Org finishes its processing.

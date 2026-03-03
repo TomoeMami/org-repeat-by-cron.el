@@ -244,6 +244,12 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 
 * 更新日志
 
+** 1.1.6 2026-03-03 漏洞修复
+由于重新规划时获取到的schedule/deadline时间戳为执行重复后的，因此将其从base-time来源中排除，避免base-time被错误延后
+
+** 1.1.5 2026-03-03 漏洞修复
+修复了当没有schedule/deadline时间戳时，无法正确创建临时repeater的问题
+
 ** 1.1.4 2026-02-27 更新内部逻辑
 现在会通过添加临时repeater的方式让org-mode来处理todo-keywords、org-log-done等情况，以规避可能的兼容性问题。
 本package仅会在org自行处理完后重新设定对应时间。

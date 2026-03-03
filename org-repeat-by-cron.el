@@ -700,11 +700,7 @@ is also updated to ensure consistent calculation for the next repetition."
                                    (day-and-p (string= (org-entry-get pom org-repeat-by-cron-day-and-prop) "t"))
                                    (now (current-time))
                                    (current-ts-str (org-entry-get pom (if (eq time-type 'deadline) "DEADLINE" "SCHEDULED")))
-                                   (repeat-time (if (eq time-type 'deadline)
-                                                    (org-get-deadline-time pom)
-                                                  (org-get-scheduled-time pom)))
                                    (base-time (or (and anchor-str (org-time-string-to-time anchor-str))
-                                                  repeat-time
                                                   now))
                                    (next (org-repeat-by-cron-next-time
                                           (org-repeat-by-cron--normalize-cron-rule cron-val)
