@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.4
+;; Version: 1.1.5
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -623,7 +623,7 @@ It adds a temporary repeater cookie if none is present, ensuring
                     (let* ((arity (org-repeat-by-cron--cron-rule-arity cron-str))
                            (fmt (if (eq arity 5) "%Y-%m-%d %a %H:%M +1d" "%Y-%m-%d %a +1d"))
                            (new-ts-str (format-time-string fmt (current-time))))
-                      (org-schedule nil new-ts-str))))))
+                      (org-entry-put pom "SCHEDULED" (concat "<" new-ts-str ">")))))))
             (when process-deadline
               (let* ((ts-str (org-entry-get pom "DEADLINE"))
                      (has-ts (and ts-str (not (string-empty-p ts-str))))
@@ -643,7 +643,7 @@ It adds a temporary repeater cookie if none is present, ensuring
                   (let* ((arity (org-repeat-by-cron--cron-rule-arity cron-val))
                          (fmt (if (eq arity 5) "%Y-%m-%d %a %H:%M +1d" "%Y-%m-%d %a +1d"))
                          (new-ts-str (format-time-string fmt (current-time))))
-                    (org-deadline nil new-ts-str))))))
+                    (org-entry-put pom "DEADLINE" (concat "<" new-ts-str ">")))))))
             
             ;; 4. set org-repeat-by-cron--repeater-raw
             (setq org-repeat-by-cron--repeater-raw
