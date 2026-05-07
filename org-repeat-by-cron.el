@@ -725,7 +725,7 @@ is also updated to ensure consistent calculation for the next repetition."
                       (org-schedule nil res)
                       (let ((old-str (org-entry-get pom "SCHEDULED"))
                             (new-str (concat "<" res ">")))
-                        (unless (equal old-str new-str)
+                        (unless (or keep-sched (equal old-str new-str))
                           (save-excursion
                             (org-back-to-heading t)
                             (when (search-forward old-str nil t)
@@ -743,7 +743,7 @@ is also updated to ensure consistent calculation for the next repetition."
                       (org-deadline nil res)
                       (let ((old-str (org-entry-get pom "DEADLINE"))
                             (new-str (concat "<" res ">")))
-                        (unless (equal old-str new-str)
+                        (unless (or keep-dead (equal old-str new-str))
                           (save-excursion
                             (org-back-to-heading t)
                             (when (search-forward old-str nil t)
