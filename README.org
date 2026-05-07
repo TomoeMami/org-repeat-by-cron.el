@@ -232,6 +232,8 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 
 * Changelog
 
+** 1.1.7 2026-05-07 Bug Fixes
+Fixed a bug where =org-deadline-warning-days= and =org-scheduled-delay-days= starting with a minus sign in timestamps were ignored during duplication. They are now correctly inherited and preserved.
 ** 1.1.6 2026-03-03 Bug fix
 Since the schedule/deadline timestamps obtained during rescheduling are from after the repetition was executed, they have been excluded from the base-time source to prevent the base-time from being incorrectly postponed.
 

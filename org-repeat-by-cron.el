@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.6
+;; Version: 1.1.7
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -706,8 +706,9 @@ is also updated to ensure consistent calculation for the next repetition."
                                           (org-repeat-by-cron--normalize-cron-rule cron-val)
                                           (if (time-less-p base-time now) now base-time)
                                           day-and-p))
+                                   (delay-or-warn (when (string-match "\\(-[0-9]+[hdwmy]\\)" current-ts-str) (match-string 1 ts-str)))
                                    (c-arity (org-repeat-by-cron--cron-rule-arity cron-val))
-                                   (fmt (org-repeat-by-cron--reschedule-use-time-p anchor-str c-arity current-ts-str)))
+                                   (fmt (concat (org-repeat-by-cron--reschedule-use-time-p anchor-str c-arity current-ts-str) delay-or-warn)))
                               (if next
                                   (let ((next-raw (format-time-string fmt next)))
                                     (org-entry-put pom anchor-prop next-raw)

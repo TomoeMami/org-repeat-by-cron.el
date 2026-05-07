@@ -244,6 +244,8 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 
 * 更新日志
 
+** 1.1.7 2026-05-07 漏洞修复
+修复重复时会忽略掉时间戳中以负号开头的 =org-deadline-warning-days= 和 =org-scheduled-delay-days= 的漏洞，现在可以正确被继承和保留了。
 ** 1.1.6 2026-03-03 漏洞修复
 由于重新规划时获取到的schedule/deadline时间戳为执行重复后的，因此将其从base-time来源中排除，避免base-time被错误延后
 
