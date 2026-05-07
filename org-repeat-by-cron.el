@@ -1,6 +1,6 @@
 ;;; org-repeat-by-cron.el --- An Org mode task repeater based on Cron expressions -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 TomoeMami
+;; Copyright (C) 2025-2026 TomoeMami
 
 ;; Author: TomoeMami <trembleafterme@outlook.com>
 ;; Created: 2025.09.09
