@@ -726,9 +726,10 @@ is also updated to ensure consistent calculation for the next repetition."
                       (let ((old-str (org-entry-get pom "SCHEDULED"))
                             (new-str (concat "<" res ">")))
                         (unless (equal old-str new-str)
-                          (org-back-to-heading t)
-                          (when (search-forward old-str nil t)
-                          (replace-match new-str))))
+                          (save-excursion
+                            (org-back-to-heading t)
+                            (when (search-forward old-str nil t)
+                              (replace-match new-str)))))
                       (message "[Cron-Repeat] SCHEDULED repeat to %s" res))))
 
                 ;; 3. Deadline
@@ -743,9 +744,10 @@ is also updated to ensure consistent calculation for the next repetition."
                       (let ((old-str (org-entry-get pom "DEADLINE"))
                             (new-str (concat "<" res ">")))
                         (unless (equal old-str new-str)
-                          (org-back-to-heading t)
-                          (when (search-forward old-str nil t)
-                          (replace-match new-str))))
+                          (save-excursion
+                            (org-back-to-heading t)
+                            (when (search-forward old-str nil t)
+                              (replace-match new-str)))))
                       (message "[Cron-Repeat] DEADLINE repeat to %s"  res))))))))))))
 
 ;;;###autoload
