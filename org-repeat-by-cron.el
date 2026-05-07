@@ -653,7 +653,6 @@ It adds a temporary repeater cookie if none is present, ensuring
                    (dead-has-rep 'deadline)
                    (t nil))))))))))
 
-
 (defun org-repeat-by-cron-on-done (change-plist)
   "Reschedule the Org task at point according to CHANGE-PLIST and cron rules.
 
@@ -706,7 +705,8 @@ is also updated to ensure consistent calculation for the next repetition."
                                           (org-repeat-by-cron--normalize-cron-rule cron-val)
                                           (if (time-less-p base-time now) now base-time)
                                           day-and-p))
-                                   (delay-or-warn (when (string-match "\\(-[0-9]+[hdwmy]\\)" current-ts-str) (match-string 1 ts-str)))
+                                   (delay-or-warn (when (string-match "\\(-[0-9]+[hdwmy]\\)" current-ts-str)
+                                                    (concat " " (match-string 1 current-ts-str))))
                                    (c-arity (org-repeat-by-cron--cron-rule-arity cron-val))
                                    (fmt (concat (org-repeat-by-cron--reschedule-use-time-p anchor-str c-arity current-ts-str) delay-or-warn)))
                               (if next
@@ -723,6 +723,12 @@ is also updated to ensure consistent calculation for the next repetition."
                     (when res
                       (unless keep-sched (org-schedule '(4)))
                       (org-schedule nil res)
+                      (let ((old-str (org-entry-get pom "SCHEDULED"))
+                            (new-str (concat "<" res ">")))
+                        (unless (equal old-str new-str)
+                          (org-back-to-heading t)
+                          (when (search-forward old-str nil t)
+                          (replace-match new-str))))
                       (message "[Cron-Repeat] SCHEDULED repeat to %s" res))))
 
                 ;; 3. Deadline
@@ -734,6 +740,12 @@ is also updated to ensure consistent calculation for the next repetition."
                     (when res
                       (unless keep-dead (org-deadline '(4)))
                       (org-deadline nil res)
+                      (let ((old-str (org-entry-get pom "DEADLINE"))
+                            (new-str (concat "<" res ">")))
+                        (unless (equal old-str new-str)
+                          (org-back-to-heading t)
+                          (when (search-forward old-str nil t)
+                          (replace-match new-str))))
                       (message "[Cron-Repeat] DEADLINE repeat to %s"  res))))))))))))
 
 ;;;###autoload
