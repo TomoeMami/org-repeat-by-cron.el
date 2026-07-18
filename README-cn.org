@@ -118,7 +118,8 @@ SCHEDULED: <2025-12-14 周日>
   - 根据计算出来的时间点，对应更新任务的 =SCHEDULED= 或 =DEADLINE= 时间戳，又或许两者皆更新，并删除掉临时补全的 =repeater= 。
     
 提示：由于重复事项由org-mode自行处理， =org-repeat-by-cron= 仅会在org处理重复完成后重新设置时间戳，所以本package可以与 =org-habit= 同时启用。
-
+*** 其他提示
+自 1.1.8 版本起，会默认为 =org-todo= 函数添加一个检测前缀 =arg= 的 advice ，以便尊重 =org-todo= 的 =-1= 前缀。如不需要相关功能，可通过设置 =setq org-repeat-by-cron-respect-cancel-repeater nil= 关闭。
 ** Cron 语法详解
 
 标准 Cron 表达式由 5 个字段组成，用空格分隔。
@@ -243,7 +244,9 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * 更新日志
-
+** 1.1.8 2026-07-18 尊重 `org-todo` 的负数前缀
+添加了一个函数 =org-repeat-by-cron--org-todo-advice= 和两个变量 =org-repeat-by-cron-respect-cancel-repeater= =org-repeat-by-cron--skip-next= ，以便尊重调用 =org-todo= 时输入的取消 repeater 的前缀 =-1= 。
+默认开启，可通过设置 =setq org-repeat-by-cron-respect-cancel-repeater nil= 关闭相关 advice 。
 ** 1.1.7 2026-05-07 漏洞修复
 修复重复时会忽略掉时间戳中以负号开头的 =org-deadline-warning-days= 和 =org-scheduled-delay-days= 的漏洞，现在可以正确被继承和保留了。
 ** 1.1.6 2026-03-03 漏洞修复

@@ -114,6 +114,8 @@ SCHEDULED: <2025-12-14 Sun>
 
 *Note:* Because the repetition is processed by Org-mode, this package is fully compatible with =org-habit= .
 
+*** Additional Notes
+Since version 1.1.8, an advice is added to the =org-todo= function by default to detect the prefix argument =arg= , so that the =-1= prefix of =org-todo= is respected. If you do not need this feature, you can disable it by setting =(setq org-repeat-by-cron-respect-cancel-repeater nil)= .
 ** Cron Syntax
 
 Standard Cron expressions consist of 5 fields separated by spaces.
@@ -231,7 +233,8 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * Changelog
-
+** 1.1.8 2026-07-18 Respect negative prefix of =org-todo=
+Added a function =org-repeat-by-cron--org-todo-advice= and two variables =org-repeat-by-cron-respect-cancel-repeater= and =org-repeat-by-cron--skip-next= , to respect the =-1= prefix (which cancels the repeater) when calling =org-todo= . This is enabled by default, and can be turned off by setting =(setq org-repeat-by-cron-respect-cancel-repeater nil)= .
 ** 1.1.7 2026-05-07 Bug Fixes
 Fixed a bug where =org-deadline-warning-days= and =org-scheduled-delay-days= starting with a minus sign in timestamps were ignored during duplication. They are now correctly inherited and preserved.
 ** 1.1.6 2026-03-03 Bug fix
