@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.8
+;; Version: 1.1.9
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -781,6 +781,44 @@ is also updated to ensure consistent calculation for the next repetition."
                               (when (search-forward old-str nil t)
                                 (replace-match new-str)))))
                         (message "[Cron-Repeat] DEADLINE repeat to %s"  res)))))))))))))
+
+;;; To be called from diary-sexp-entry, where DATE, ENTRY are bound.
+;;;###autoload
+(defun org-repeat-by-cron-diary (cron-str &optional mark)
+  "Diary entry that matches a 3-field cron expression (DOM MON DOW).
+Entry applies if the current date, given by `date', matches CRON-STR.
+
+CRON-STR must contain exactly three space-separated fields:
+  1. Day of Month   (1-31, *, L, LW, 15W, etc.)
+  2. Month          (1-12, *, names like JAN-DEC, ranges, lists)
+  3. Day of Week    (0-7, *, names like MON-SUN, 5L, 5#3, etc.)
+
+An optional parameter MARK specifies a face or single-character string
+to use when highlighting the day in the calendar."
+  (require 'org-repeat-by-cron)
+  (with-no-warnings (defvar date) (defvar entry))
+  (let* ((parts (split-string (string-trim cron-str) "[ \t]+" t))
+         (dom-rule   (nth 0 parts))
+         (month-rule (org-repeat-by-cron--substitute-aliases
+                      (nth 1 parts)
+                      org-repeat-by-cron--month-aliases))
+         (dow-rule   (org-repeat-by-cron--substitute-aliases
+                      (nth 2 parts)
+                      org-repeat-by-cron--dow-aliases))
+         (day   (nth 1 date))     ;; date is (month day year)
+         (month (nth 0 date))
+         (year  (nth 2 date))
+         (month-list (org-repeat-by-cron--expand-field month-rule 1 12)))
+    (and (member month month-list)
+         (org-repeat-by-cron--day-fields-match-p dom-rule dow-rule day month year)
+         (cons mark entry))))
+
+;;;###autoload
+(defalias 'diary-cron-date 'org-repeat-by-cron-diary
+  "Alias for `org-repeat-by-cron-diary', matching a date against a 3‑field cron expression.
+
+Usage in a diary file:
+  %%(diary-cron-date \"5,15 * MON,FRI\") some-mark")
 
 ;;;###autoload
 (define-minor-mode global-org-repeat-by-cron-mode

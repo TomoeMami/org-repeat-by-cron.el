@@ -244,7 +244,9 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * 更新日志
-** 1.1.8 2026-07-18 尊重 `org-todo` 的负数前缀
+** 1.1.9 2026-07-26 添加 =diary-sexp= 支持
+添加了一个新函数 =org-repeat-by-cron-diary= （别名为 =diary-cron-date= ），可用于 =%%= 开头的 diary-sexp 行，以便在 agenda 中出现。使用例： =org-agenda-files= 某文件中单行内容为 =%%(diary-cron-date "* * Fri") 每周五Fri= ，则会在 agenda 的每周五展示「每周五Fri」。 
+** 1.1.8 2026-07-18 尊重 =org-todo= 的负数前缀
 添加了一个函数 =org-repeat-by-cron--org-todo-advice= 和两个变量 =org-repeat-by-cron-respect-cancel-repeater= =org-repeat-by-cron--skip-next= ，以便尊重调用 =org-todo= 时输入的取消 repeater 的前缀 =-1= 。
 默认开启，可通过设置 =setq org-repeat-by-cron-respect-cancel-repeater nil= 关闭相关 advice 。
 ** 1.1.7 2026-05-07 漏洞修复
