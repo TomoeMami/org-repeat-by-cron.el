@@ -233,6 +233,8 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * Changelog
+** 1.1.10 2026-08-17 Preserve time intervals on rescheduling
+Fixed rescheduling dropping the end time of interval timestamps such as =<2026-08-14 Thu 09:00-10:30>=. The original interval duration is now preserved when the cron rule computes the next start time, e.g. the next occurrence becomes =<2026-08-17 Mon 09:00-10:30>=. Both =SCHEDULED=/=DEADLINE= timestamps and the corresponding =REPEAT_ANCHOR=/=REPEAT_DEADLINE_ANCHOR= properties now retain the complete =HH:MM-HH:MM= range.
 ** 1.1.9 2026-07-26 Add support for =diary-sexp=
 Add a new function =org-repeat-by-cron-diary= (alias =diary-cron-date=), which can be used in diary-sexp lines starting with =%%= to appear in the agenda. Usage: a file in =org-agenda-files= with a single line like =%%(diary-cron-date "* * Fri") Every Friday= will show "Every Friday" on every Friday in the agenda.
 ** 1.1.8 2026-07-18 Respect negative prefix of =org-todo=

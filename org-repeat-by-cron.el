@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.9
+;; Version: 1.1.10
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -563,12 +563,35 @@ if any of the following conditions are met, in order of precedence:
 
 If none of these conditions are true, the function returns a
 date-only format string (\"%Y-%m-%d %a\")."
-  (let ((time-regexp "[0-9]\\{2\\}:[0-9]\\{2\\}"))
+  (let ((time-regexp "[0-9]\\{1,2\\}:[0-9]\\{2\\}"))
     (if (or (eq cron-arity 5)
             (and anchor-str (string-match-p time-regexp anchor-str))
             (and scheduled-str (string-match-p time-regexp scheduled-str)))
         "%Y-%m-%d %a %H:%M"
       "%Y-%m-%d %a")))
+
+(defun org-repeat-by-cron--extract-time-range-end (ts-str next)
+  "Return the shifted end-time suffix of a time range in TS-STR.
+
+TS-STR is an Org timestamp string.  If it contains a time
+interval such as \"09:00-10:30\", return the corresponding
+suffix for NEXT, e.g. \"-10:30\", keeping the duration of the
+original interval.  An interval crossing midnight is treated as
+extending into the next day.  Return nil when TS-STR contains no
+time interval.
+
+NEXT is the Emacs time value used as the new interval start."
+  (when (and ts-str next
+             (string-match
+              "\\([0-9]\\{1,2\\}\\):\\([0-9]\\{2\\}\\)-\\([0-9]\\{1,2\\}\\):\\([0-9]\\{2\\}\\)"
+              ts-str))
+    (let* ((start-min (+ (* 60 (string-to-number (match-string 1 ts-str)))
+                         (string-to-number (match-string 2 ts-str))))
+           (end-min (+ (* 60 (string-to-number (match-string 3 ts-str)))
+                       (string-to-number (match-string 4 ts-str))))
+           (duration-min (mod (- end-min start-min) 1440)))
+      (format-time-string "-%H:%M"
+                          (time-add next (* 60 duration-min))))))
 
 (defun org-repeat-by-cron--extract-repeater (ts-str)
   "Extract the Org repeater cookie from timestamp string TS-STR.
@@ -740,9 +763,12 @@ is also updated to ensure consistent calculation for the next repetition."
                                      (delay-or-warn (when (string-match "\\(-[0-9]+[hdwmy]\\)" current-ts-str)
                                                       (concat " " (match-string 1 current-ts-str))))
                                      (c-arity (org-repeat-by-cron--cron-rule-arity cron-val))
-                                     (fmt (concat (org-repeat-by-cron--reschedule-use-time-p anchor-str c-arity current-ts-str) delay-or-warn)))
+                                     (base-fmt (org-repeat-by-cron--reschedule-use-time-p anchor-str c-arity current-ts-str)))
                                 (if next
-                                    (let ((next-raw (format-time-string fmt next)))
+                                    (let* ((range-end (org-repeat-by-cron--extract-time-range-end current-ts-str next))
+                                           (next-raw (concat (format-time-string base-fmt next)
+                                                             (or range-end "")
+                                                             delay-or-warn)))
                                       (org-entry-put pom anchor-prop next-raw)
                                       next-raw)
                                   (message "[Cron-Repeat] Cannot find valid time before %s"

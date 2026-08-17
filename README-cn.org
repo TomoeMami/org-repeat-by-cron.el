@@ -244,6 +244,8 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * 更新日志
+** 1.1.10 2026-08-17 修复重复时丢失时间区间的问题
+修复了重新计划时丢失时间戳结束时间的问题。对于 =<2026-08-14 Thu 09:00-10:30>= 这类包含 =HH:MM-HH:MM= 区间的时间戳，cron 计算出的下一次开始时间会沿用原区间的时长，例如变为 =<2026-08-17 Mon 09:00-10:30>= 。现在 =SCHEDULED= / =DEADLINE= 时间戳以及对应的 =REPEAT_ANCHOR= / =REPEAT_DEADLINE_ANCHOR= 属性都会保留完整的区间。
 ** 1.1.9 2026-07-26 添加 =diary-sexp= 支持
 添加了一个新函数 =org-repeat-by-cron-diary= （别名为 =diary-cron-date= ），可用于 =%%= 开头的 diary-sexp 行，以便在 agenda 中出现。使用例： =org-agenda-files= 某文件中单行内容为 =%%(diary-cron-date "* * Fri") 每周五Fri= ，则会在 agenda 的每周五展示「每周五Fri」。 
 ** 1.1.8 2026-07-18 尊重 =org-todo= 的负数前缀
