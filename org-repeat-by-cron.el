@@ -231,6 +231,46 @@ trigger these functions."
   :group 'org-repeat-by-cron
   :type '(repeat function))
 
+(defcustom org-repeat-by-cron-next-time-filters nil
+  "Predicate function(s) used to filter candidate next times.
+
+This is the global default.  The variable is buffer-local, so a
+buffer (for example via `.dir-locals.el' or a mode hook) can
+override it for all entries in that buffer.
+
+The value may be a single function or a list of functions.  Each
+function is called in order with the candidate time as its only
+argument.  The candidate is an Emacs time value, the same kind of
+value returned by `org-repeat-by-cron-next-time'.  A candidate is
+accepted and returned only when every function returns non-nil.
+If any function returns nil, the candidate is rejected and the
+search continues with the next matching time.
+
+Functions are called in list order, and evaluation stops at the
+first function that returns nil.
+
+When the heading property named by `org-repeat-by-cron-filter-prop'
+is set, it takes precedence over this variable."
+  :group 'org-repeat-by-cron
+  :type '(choice (const :tag "No filtering" nil)
+                 function
+                 (repeat function)))
+
+(make-variable-buffer-local 'org-repeat-by-cron-next-time-filters)
+
+(defcustom org-repeat-by-cron-filter-prop "REPEAT_FILTER"
+  "Org property name for entry-local next-time filter functions.
+
+When this property is present and non-empty in the current
+heading, its value must be a space- or comma-separated list of
+function names.  Each function is called with the candidate time
+as its only argument, and every function must return non-nil for
+the candidate to be accepted.
+
+The property takes precedence over `org-repeat-by-cron-next-time-filters'."
+  :group 'org-repeat-by-cron
+  :type 'string)
+
 ;; --- [Date Calculation Helper Functions] ---
 
 (defun org-repeat-by-cron--substitute-aliases (field-str alias-map)
@@ -467,6 +507,50 @@ a comma-separated list:
           (or dom-match-p dow-match-p))
       (and dom-match-p dow-match-p))))
 
+;; --- [Additional Filter] ---
+
+(defun org-repeat-by-cron--normalize-filters (filters)
+  "Return FILTERS as a list of predicate functions.
+FILTERS may be nil, a single function, or a list of functions."
+  (cond ((null filters) nil)
+        ((functionp filters) (list filters))
+        ((listp filters) filters)
+        (t (error "[Cron-Repeat] Invalid next-time filter: %S" filters))))
+
+(defun org-repeat-by-cron--filters-from-entry ()
+  "Return entry-local next-time filters from the current heading.
+
+Read the property named by `org-repeat-by-cron-filter-prop' from
+the heading containing point.  Return nil when the property is
+absent or empty, or when point is not in an Org buffer."
+  (let ((str (and (derived-mode-p 'org-mode)
+                  (ignore-errors
+                    (org-entry-get nil org-repeat-by-cron-filter-prop)))))
+    (when (and str (not (string-empty-p (string-trim str))))
+      (mapcar (lambda (name)
+                (let ((fn (intern name)))
+                  (unless (fboundp fn)
+                    (error "[Cron-Repeat] Unknown filter function: %s" name))
+                  fn))
+              (split-string str "[ \t,]+" t)))))
+
+(defun org-repeat-by-cron--active-filters ()
+  "Return the filter functions in effect for the current search.
+
+The heading property named by `org-repeat-by-cron-filter-prop'
+takes precedence over the buffer-local/global value of
+`org-repeat-by-cron-next-time-filters'."
+  (or (org-repeat-by-cron--filters-from-entry)
+      (org-repeat-by-cron--normalize-filters
+       org-repeat-by-cron-next-time-filters)))
+
+(defun org-repeat-by-cron--next-time-filters-pass-p (time filters)
+  "Return non-nil if TIME passes all functions in FILTERS.
+
+Call each function in list order with TIME (an Emacs time value)
+as its only argument.  A function passes when it returns non-nil.
+If FILTERS is nil, return t."
+  (cl-every (lambda (fn) (funcall fn time)) filters))
 
 ;; --- [Main Function] ---
 
@@ -477,6 +561,15 @@ The function parses the five-field CRON-STRING to find the next valid
 occurrence, starting the search from the minute immediately after
 START-TIME.  It returns the result as an Emacs time value, or nil
 if no match is found within `org-repeat-by-cron-max-search-year'.
+
+Every candidate time is additionally checked against the active
+filter functions.  The heading property named by
+`org-repeat-by-cron-filter-prop' takes precedence over the
+buffer-local/global value of `org-repeat-by-cron-next-time-filters'.
+Each function is called with the candidate Emacs time value as its
+only argument.  A candidate is returned only when all functions
+return non-nil; otherwise the search continues with the next
+candidate.
 
 CRON-STRING must contain five space-separated fields:
 1. Minute (0-59)
@@ -506,33 +599,38 @@ satisfy both conditions (AND)."
     (when (/= (length cron-parts) 5) (error "Cron string must have 5 fields"))
     ;; Set seconds field of Emacs time to 0
     (setf (nth 0 decoded-time) 0)
-    (cl-block finder
-      (let ((start-year (nth 5 decoded-time)) (start-mon  (nth 4 decoded-time))
-            (start-day  (nth 3 decoded-time)) (start-hour (nth 2 decoded-time))
-            (start-min  (nth 1 decoded-time)))
-        ;; Iterate by year
-        (cl-loop for year from start-year to end-time-year do
-                 ;; Iterate through each month that matches the condition
-                 (dolist (month month-list)
-                   ;; If this month is greater than or equal to the starting month
-                   (when (>= month (if (= year start-year) start-mon 1))
-                     ;; Iterate through days of the month, starting from start day if it's the starting month
-                     (cl-loop for day from (if (and (= year start-year) (= month start-mon)) start-day 1)
-                              to (calendar-last-day-of-month month year) do
-                              ;; When year/month/day satisfy cron rules, check hours
-                              (when (org-repeat-by-cron--day-fields-match-p dom-rule dow-rule day month year day-and)
-                                (let ((current-hour-start (if (and (= year start-year) (= month start-mon) (= day start-day))
-                                                              start-hour 0)))
-                                  (dolist (hour hour-list)
-                                    ;; When hour satisfies the rule, check minutes
-                                    (when (>= hour current-hour-start)
-                                      (let ((current-min-start (if (and (= year start-year) (= month start-mon) (= day start-day) (= hour start-hour))
-                                                                   start-min 0)))
-                                        (dolist (minute minute-list)
-                                          (when (>= minute current-min-start)
-                                            (cl-return-from finder
-                                              (encode-time 0 minute hour day month year)))))))))))))
-        nil))))
+    ;; Resolve active filter functions once, before entering the search.
+    ;; `org-repeat-by-cron--active-filters' reads the heading property
+    ;; from point, so it must run before the candidate loop.
+    (let ((filters (org-repeat-by-cron--active-filters)))
+      (cl-block finder
+        (let ((start-year (nth 5 decoded-time)) (start-mon  (nth 4 decoded-time))
+              (start-day  (nth 3 decoded-time)) (start-hour (nth 2 decoded-time))
+              (start-min  (nth 1 decoded-time)))
+          ;; Iterate by year
+          (cl-loop for year from start-year to end-time-year do
+                   ;; Iterate through each month that matches the condition
+                   (dolist (month month-list)
+                     ;; If this month is greater than or equal to the starting month
+                     (when (>= month (if (= year start-year) start-mon 1))
+                       ;; Iterate through days of the month, starting from start day if it's the starting month
+                       (cl-loop for day from (if (and (= year start-year) (= month start-mon)) start-day 1)
+                                to (calendar-last-day-of-month month year) do
+                                ;; When year/month/day satisfy cron rules, check hours
+                                (when (org-repeat-by-cron--day-fields-match-p dom-rule dow-rule day month year day-and)
+                                  (let ((current-hour-start (if (and (= year start-year) (= month start-mon) (= day start-day))
+                                                                start-hour 0)))
+                                    (dolist (hour hour-list)
+                                      ;; When hour satisfies the rule, check minutes
+                                      (when (>= hour current-hour-start)
+                                        (let ((current-min-start (if (and (= year start-year) (= month start-mon) (= day start-day) (= hour start-hour))
+                                                                     start-min 0)))
+                                          (dolist (minute minute-list)
+                                            (when (>= minute current-min-start)
+                                              (let ((candidate (encode-time 0 minute hour day month year)))
+                                                (when (org-repeat-by-cron--next-time-filters-pass-p candidate filters)
+                                                  (cl-return-from finder candidate))))))))))))))
+          nil)))))
 
 (defun org-repeat-by-cron--cron-rule-arity (rule)
   "Return the number of fields in the cron string RULE.
