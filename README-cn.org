@@ -99,6 +99,10 @@ SCHEDULED: <2025-12-14 周日>
 - =REPEAT_DEADLINE= : *（可选）*
   - 设置为 =t= 时，更新 =DEADLINE= 而非 =SCHEDULED= 。 *注意：* 为了防止冲突，启用此项后会自动清除任务原有的 =SCHEDULED= 时间戳。
   - 设置为 =Cron= 表达式（如 0 18 * * 5）时，开启独立重复模式。 =SCHEDULED= 将按 =REPEAT_CRON= 重复，而 =DEADLINE= 将按此处的表达式和独立的 =REPEAT_DEADLINE_ANCHOR= 单独重复。
+- =REPEAT_FILTER= : *（可选，1.1.11 新增）* 以空格或逗号分隔的 Elisp
+  过滤函数名列表。每个函数都会收到候选的下一次时间，只有返回非 nil
+  才会接受该候选。该属性存在且非空时优先于变量
+  =org-repeat-by-cron-next-time-filters= 。详见下文「候选时间过滤」。
 - =REPEAT_ANCHOR= 与 =REPEAT_DEADLINE_ANCHOR= : 由插件自动创建并维护，存储上次触发的时间基准。用户通常不需要手动干预。若现有的该项被删除，则在下次重复时会采用当前时间为基准，并重新计算设置该值。
 *** 工作流程
 
@@ -156,6 +160,72 @@ SCHEDULED: <2025-12-14 周日>
   - *「第 N 个星期 X」* 。 =DOW#N= 格式。
   - =5#2= -> 第二个星期五  =1#1,1#3= -> 第一个或第三个星期一       
 
+** 高级配置（1.1.11 新增）
+
+*** 候选时间过滤
+
+默认情况下， =org-repeat-by-cron-next-time= 会直接返回第一个满足 cron规则的未来时间。自 1.1.11 起，可以添加谓词函数逐个检查候选时间，拒绝不需要的候选，让搜索继续寻找下一个候选。
+
+- 变量 =org-repeat-by-cron-next-time-filters= ：全局默认过滤配置。
+  - 该变量是 buffer-local 的：用 =setq-default= 设置全局默认值，用 =setq= （或 =.dir-locals.el= / mode hook）为某个缓冲区单独覆盖。
+  - 取值可为 =nil= （不过滤）、单个函数或函数列表。
+  - 按列表顺序调用每个函数，唯一参数是候选的 Emacs 时间值；只有所有函数都返回非 nil 时才接受该候选，遇到第一个返回 nil 的函数即停止。
+- 属性 =REPEAT_FILTER= （=org-repeat-by-cron-filter-prop=）：针对单个
+  条目的过滤配置。
+  - 值为以空格或逗号分隔的函数名列表，例如 =:REPEAT_FILTER: my-filter-a my-filter-b= 。
+  - 函数必须已定义（=fboundp= 为真），否则会报错。
+  - 属性存在且非空时，对该条目 *替换*（而不是合并） =org-repeat-by-cron-next-time-filters= 。
+
+传给过滤函数的候选是 Emacs 时间值，与 =org-repeat-by-cron-next-time= 的返回值同类（可直接交给 =format-time-string= / =decode-time= 处理）。
+
+示例：每天重复，但跳过周末：
+
+#+begin_src elisp
+(defun my-skip-weekends-p (time)
+  "TIME 不是周六或周日时返回非 nil。"
+  (not (member (format-time-string "%u" time) '("6" "7"))))
+
+;; 为所有缓冲区设置全局默认值：
+(setq-default org-repeat-by-cron-next-time-filters #'my-skip-weekends-p)
+
+;; 通过 .dir-locals.el 只覆盖某个目录：
+;; ((org-mode . ((org-repeat-by-cron-next-time-filters . my-skip-weekends-p))))
+#+end_src
+
+也可以只对某个条目启用：
+
+#+begin_src org
+,* TODO 每日复盘（仅工作日）
+SCHEDULED: <2026-09-14 周一>
+:PROPERTIES:
+:REPEAT_CRON: * * *
+:REPEAT_FILTER: my-skip-weekends-p
+:END:
+#+end_src
+
+- 更新的函数 =org-repeat-by-cron-next-time= (cron-string start-time &optional day-and) ：每次调用先解析当前生效的过滤器（从 point 所在条目读取， =REPEAT_FILTER= 优先于  =org-repeat-by-cron-next-time-filters= ），随后对每个候选时间逐一校验，全部通过才返回。若在 =org-repeat-by-cron-max-search-year= 年限内没有候选通过，仍返回 =nil= 。
+
+*内部辅助函数* （以 =--= 开头，一般仅供高级定制使用）：
+- =org-repeat-by-cron--normalize-filters= ：把 =nil= / 单个函数 / 函数 列表归一化为函数列表。
+- =org-repeat-by-cron--filters-from-entry= ：从当前标题的 =REPEAT_FILTER= 属性读取并解析过滤函数名。
+- =org-repeat-by-cron--active-filters= ：返回本次搜索生效的过滤器（先取条目属性，否则取 buffer-local/全局变量）。
+- =org-repeat-by-cron--next-time-filters-pass-p= ：判断某个候选时间是否  通过列表中的所有函数。
+
+*** 重复完成后的回调函数
+
+- 变量 =org-repeat-by-cron-after-repeat-functions= ：函数列表，在 =org-repeat-by-cron-on-done= 完成 =SCHEDULED= 和/或 =DEADLINE= 时间戳 （以及 =REPEAT_ANCHOR= / =REPEAT_DEADLINE_ANCHOR= ）的重排后调用。
+  - 每个函数按列表顺序调用一次，*不带参数*，调用时 point 位于条目标题处。
+  - 只在一次重复的最后一次 =org-trigger-hook= 调用（非完成状态 → 完成状态）时运行；此前由 =org-auto-repeat-maybe= 引发的递归 =org-todo= 调用（完成状态 → 非完成状态）不会触发。
+
+示例：每次 cron 重排后打印一条消息：
+
+#+begin_src elisp
+(defun my-cron-after-repeat ()
+  (message "[Cron-Repeat] 已重排至 %s"
+           (org-entry-get nil "SCHEDULED")))
+
+(add-hook 'org-repeat-by-cron-after-repeat-functions #'my-cron-after-repeat)
+#+end_src
 ** 示例
 
 *** 示例 1: 每周报告
@@ -244,6 +314,12 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * 更新日志
+** 1.1.11 2026-09-07 新增候选时间过滤与重复后回调
+- 新增：变量 =org-repeat-by-cron-next-time-filters= （buffer-local）用于过滤候选的下一次时间。取值可为 =nil= 、单个函数或函数列表；只有所有函数都返回非 nil 才接受候选，否则继续搜索下一个候选。
+- 新增：变量 =org-repeat-by-cron-filter-prop= （默认 =REPEAT_FILTER= ）定义条目属性名，属性值为以空格或逗号分隔的过滤函数名列表；属性存在且非空时优先于 =org-repeat-by-cron-next-time-filters= 。
+- 新增：变量 =org-repeat-by-cron-after-repeat-functions= ，在 =org-repeat-by-cron-on-done= 完成重排后依次调用列表中的无参函数；调用时 point 位于标题处，且只在一次重复的最后一次 =org-trigger-hook= （非完成状态 → 完成状态）时运行。
+- 更新：=org-repeat-by-cron-next-time= 每次调用先解析当前生效的过滤器，并对每个候选时间逐一校验。
+- 内部：新增辅助函数 =org-repeat-by-cron--normalize-filters= 、 =org-repeat-by-cron--filters-from-entry= 、 =org-repeat-by-cron--active-filters= 、 =org-repeat-by-cron--next-time-filters-pass-p= ；移除 =org-repeat-by-cron-on-done= 中冗余的 =org-repeat-by-cron--skip-next= 判断（行为不变）。
 ** 1.1.10 2026-08-17 修复重复时丢失时间区间的问题
 修复了重新计划时丢失时间戳结束时间的问题。对于 =<2026-08-14 Thu 09:00-10:30>= 这类包含 =HH:MM-HH:MM= 区间的时间戳，cron 计算出的下一次开始时间会沿用原区间的时长，例如变为 =<2026-08-17 Mon 09:00-10:30>= 。现在 =SCHEDULED= / =DEADLINE= 时间戳以及对应的 =REPEAT_ANCHOR= / =REPEAT_DEADLINE_ANCHOR= 属性都会保留完整的区间。
 ** 1.1.9 2026-07-26 添加 =diary-sexp= 支持

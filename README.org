@@ -98,6 +98,11 @@ SCHEDULED: <2025-12-14 Sun>
 - =REPEAT_DEADLINE=: *(Optional)*
   - If set to *t* : The Cron rule in =REPEAT_CRON= updates the =DEADLINE= instead of =SCHEDULED= . (Existing =SCHEDULED= timestamps are cleared to prevent conflicts).
   - If set to a *Cron expression* (e.g. =0 18 * * 5= ): Enable independent repetition mode. The =SCHEDULED= time follows =REPEAT_CRON= , while the =DEADLINE= follows this specific expression.
+- =REPEAT_FILTER= : *(Optional, New in 1.1.11)* A space- or comma-separated
+  list of Elisp filter function names. Each function is called with the
+  candidate next time and must return non-nil for that candidate to be
+  accepted. When present and non-empty, it takes precedence over
+  =org-repeat-by-cron-next-time-filters= . See *Next-Time Filters* below.
 - =REPEAT_ANCHOR= & =REPEAT_DEADLINE_ANCHOR= : Automatically maintained by the plugin to store the last trigger base time. Users usually don't need to edit this. If deleted, the plugin will use the current time as the base for the next calculation.
 
 *** Workflow
@@ -155,6 +160,71 @@ Standard Cron expressions consist of 5 fields separated by spaces.
   - =5#2= -> The second Friday of the month.
   - =1#1,1#3= -> The first and third Monday.
 
+** Advanced Configuration (New in 1.1.11)
+*** Next-Time Filters
+
+By default, =org-repeat-by-cron-next-time= returns the first future time that matches the cron rule. Since 1.1.11 you can add predicate functions that inspect each candidate time and reject the ones you do not want, causing the search to continue with the next candidate.
+
+- Variable =org-repeat-by-cron-next-time-filters= : the global default filter configuration.
+  - It is buffer-local, so =setq-default= sets the default for all buffers, while =setq= (or =.dir-locals.el= / a mode hook) overrides it for a single buffer.
+  - The value may be =nil= (no filtering), a single function, or a list of functions.
+  - Each function is called in list order with the candidate Emacs time as its only argument. A candidate is accepted only when *every* function returns non-nil; evaluation stops at the first function returning nil.
+- Property =REPEAT_FILTER= (=org-repeat-by-cron-filter-prop=): per-entry filter configuration.
+  - Its value is a space- or comma-separated list of function names, e.g. =:REPEAT_FILTER: my-filter-a my-filter-b= .
+  - The functions must already be defined (=fboundp=), otherwise an error is signaled.
+  - When the property is present and non-empty, it *replaces* (does not merge with) =org-repeat-by-cron-next-time-filters= for that entry.
+
+The candidate passed to each filter is an Emacs time value, the same kind of value returned by =org-repeat-by-cron-next-time= (and accepted by =format-time-string= / =decode-time=).
+
+Example: repeat every day, but skip weekends:
+
+#+begin_src elisp
+(defun my-skip-weekends-p (time)
+  "Return non-nil if TIME is not a Saturday or Sunday."
+  (not (member (format-time-string "%u" time) '("6" "7"))))
+
+;; Global default for all buffers:
+(setq-default org-repeat-by-cron-next-time-filters #'my-skip-weekends-p)
+
+;; Buffer-local override via .dir-locals.el:
+;; ((org-mode . ((org-repeat-by-cron-next-time-filters . my-skip-weekends-p))))
+#+end_src
+
+Or set the filter for a single entry only:
+
+#+begin_src org
+,* TODO Daily Review (weekdays)
+SCHEDULED: <2026-09-14 Mon>
+:PROPERTIES:
+:REPEAT_CRON: * * *
+:REPEAT_FILTER: my-skip-weekends-p
+:END:
+#+end_src
+
+- Updated function =org-repeat-by-cron-next-time= (cron-string start-time &optional day-and): the active filters are resolved once per call (from the entry at point, with =REPEAT_FILTER= taking precedence over =org-repeat-by-cron-next-time-filters=), and every candidate time is checked before it is returned. If no candidate passes within =org-repeat-by-cron-max-search-year=, it still returns =nil=.
+
+*Internal helpers* (prefixed with =--=, normally only needed for advanced customization):
+- =org-repeat-by-cron--normalize-filters= : normalize =nil=, a single function, or a list of functions into a list.
+- =org-repeat-by-cron--filters-from-entry= : read and resolve the filter function names from the current heading's =REPEAT_FILTER= property.
+- =org-repeat-by-cron--active-filters= : return the filters in effect for the current search (entry property first, then the buffer-local/global
+  variable).
+- =org-repeat-by-cron--next-time-filters-pass-p= : return non-nil when a candidate time passes every function in the list.
+
+*** Post-Repeat Functions
+
+- Variable =org-repeat-by-cron-after-repeat-functions= : a list of functions called after =org-repeat-by-cron-on-done= has finished its rescheduling pass for the =SCHEDULED= and/or =DEADLINE= timestamps (including the =REPEAT_ANCHOR= / =REPEAT_DEADLINE_ANCHOR= updates).
+  - Each function is called once, in list order, with *no arguments*, and with point at the entry heading.
+  - They run only for the final =org-trigger-hook= call of a repeat: the state change from a non-done keyword to a done keyword. The earlier recursive =org-todo= call made by =org-auto-repeat-maybe= (done → non-done) does not trigger them.
+
+Example: log a message after every cron reschedule:
+
+#+begin_src elisp
+(defun my-cron-after-repeat ()
+  (message "[Cron-Repeat] Rescheduled to %s"
+           (org-entry-get nil "SCHEDULED")))
+
+(add-hook 'org-repeat-by-cron-after-repeat-functions #'my-cron-after-repeat)
+#+end_src
 ** Examples
 
 *** 1. Weekly Report
@@ -233,6 +303,12 @@ SCHEDULED: <2025-09-08 Mon> DEADLINE: <2025-09-12 Fri>
 #+end_src
 
 * Changelog
+** 1.1.11 2026-09-07 Next-time filters and post-repeat hooks
+- New: Variable =org-repeat-by-cron-next-time-filters= (buffer-local) filters candidate next times. It accepts =nil=, a single function, or a list of functions; a candidate is returned only when every function returns non-nil, otherwise the search continues with the next candidate.
+- New: Variable =org-repeat-by-cron-filter-prop= (default =REPEAT_FILTER=) defines an entry property whose value is a space- or comma-separated list of filter function names. When present and non-empty, it takes precedence over =org-repeat-by-cron-next-time-filters=.
+- New: Variable =org-repeat-by-cron-after-repeat-functions= holds functions called with no arguments after =org-repeat-by-cron-on-done= finishes rescheduling. They run with point at the heading and only for the final non-done → done =org-trigger-hook= call of a repeat.
+- Updated: =org-repeat-by-cron-next-time= now resolves the active filters once per call and checks every candidate time against them.
+- Internal: Added helpers =org-repeat-by-cron--normalize-filters=, =org-repeat-by-cron--filters-from-entry=, =org-repeat-by-cron--active-filters= and =org-repeat-by-cron--next-time-filters-pass-p=; removed a redundant =org-repeat-by-cron--skip-next= check inside =org-repeat-by-cron-on-done= (no behavior change).
 ** 1.1.10 2026-08-17 Preserve time intervals on rescheduling
 Fixed rescheduling dropping the end time of interval timestamps such as =<2026-08-14 Thu 09:00-10:30>=. The original interval duration is now preserved when the cron rule computes the next start time, e.g. the next occurrence becomes =<2026-08-17 Mon 09:00-10:30>=. Both =SCHEDULED=/=DEADLINE= timestamps and the corresponding =REPEAT_ANCHOR=/=REPEAT_DEADLINE_ANCHOR= properties now retain the complete =HH:MM-HH:MM= range.
 ** 1.1.9 2026-07-26 Add support for =diary-sexp=
