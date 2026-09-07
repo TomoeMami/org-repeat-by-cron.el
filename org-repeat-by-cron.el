@@ -8,7 +8,7 @@
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.10
+;; Version: 1.1.11
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -214,6 +214,22 @@ Setting this option has immediate effect only when
          (if (and global-org-repeat-by-cron-mode val)
              (advice-add 'org-todo :around #'org-repeat-by-cron--org-todo-advice)
            (advice-remove 'org-todo #'org-repeat-by-cron--org-todo-advice))))
+
+(defcustom org-repeat-by-cron-after-repeat-functions nil
+  "Functions called with no arguments after a cron repeat adjustment.
+
+Each function in this list is called once, in list order, after
+`org-repeat-by-cron-on-done' has finished its rescheduling pass
+for the SCHEDULED and/or DEADLINE timestamps.  The functions are
+called with point at the entry heading and with no arguments.
+
+They run only for the final `org-trigger-hook' call of a repeat:
+the state change from a non-done keyword to a done keyword.  The
+earlier recursive `org-todo' call made by `org-auto-repeat-maybe'
+goes from a done keyword back to a non-done keyword and does not
+trigger these functions."
+  :group 'org-repeat-by-cron
+  :type '(repeat function))
 
 ;; --- [Date Calculation Helper Functions] ---
 
@@ -722,8 +738,7 @@ is also updated to ensure consistent calculation for the next repetition."
       (when (and cron-str
                  (not (string-empty-p (string-trim cron-str)))
                  (not (member from-str org-done-keywords))
-                 (member to-str org-done-keywords)
-                 (not org-repeat-by-cron--skip-next))
+                 (member to-str org-done-keywords))
         (save-excursion
           (org-back-to-heading t)
           (let ((cron-arity (org-repeat-by-cron--cron-rule-arity cron-str)))
@@ -806,7 +821,15 @@ is also updated to ensure consistent calculation for the next repetition."
                               (org-back-to-heading t)
                               (when (search-forward old-str nil t)
                                 (replace-match new-str)))))
-                        (message "[Cron-Repeat] DEADLINE repeat to %s"  res)))))))))))))
+                        (message "[Cron-Repeat] DEADLINE repeat to %s"  res))))
+
+
+                  ;; 4. Run post-adjustment functions once, only on the
+                  ;; final `org-trigger-hook' call of this repeat.
+                  (save-excursion
+                    (org-back-to-heading t)
+                    (dolist (fn org-repeat-by-cron-after-repeat-functions)
+                      (funcall fn))))))))))))
 
 ;;; To be called from diary-sexp-entry, where DATE, ENTRY are bound.
 ;;;###autoload
