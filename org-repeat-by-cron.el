@@ -3,12 +3,13 @@
 ;; Copyright (C) 2025-2026 TomoeMami
 
 ;; Author: TomoeMami <trembleafterme@outlook.com>
+;; Assisted-by: DeepSeek Harness:deepseek-flash
 ;; Created: 2025.09.09
 
 ;; Keywords: calendar
 ;; URL: https://github.com/TomoeMami/org-repeat-by-cron.el
 
-;; Version: 1.1.11
+;; Version: 1.1.12
 ;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is not part of GNU Emacs.
@@ -109,6 +110,28 @@
 ;; cookie (e.g., +1w) on the same task, the build-in cookie will
 ;; be taken over and preserved, so you can use this package with
 ;; org-habit.
+;; 
+;; Relative repeaters
+;;
+;; REPEAT_CRON also accepts a bare Org repeater instead of a cron
+;; string.  This is useful when the repetition is relative to the
+;; previous occurrence rather than a calendar rule:
+;;
+;; #+begin_src org
+;; ,* TODO Water the plants
+;; :PROPERTIES:
+;; :REPEAT_CRON: +3d
+;; :END:
+;; #+end_src
+;;
+;; A single "+" is rewritten to ".+", i.e. the next date is counted
+;; from the day the task is completed (Org's ".+" semantics).  Write
+;; "++3d" to keep Org's anchored, catch-up semantics.  The rule must
+;; start with "+" and must be a bare repeater: ".+3d" and "+3d extra"
+;; are rejected, and upper-case units such as "+3D" are lower-cased.
+;; Such rules are handled by Org's own `org-auto-repeat-maybe'; this
+;; package only recognises the rule, rewrites the cookie and maintains
+;; the anchor property.
 ;;
 ;; Check README for more usage: https://github.com/TomoeMami/org-repeat-by-cron.el
 ;; 
@@ -116,6 +139,10 @@
 
 (require 'cl-lib)
 (require 'org)
+
+;; `org-state' is bound dynamically by `org-todo'; declare it so that
+;; the byte-compiler does not treat it as a free variable.
+(defvar org-state)
 
 (defgroup org-repeat-by-cron nil
   "Cron-style task repetition for Org mode.
@@ -139,7 +166,10 @@ according to complex cron-style schedules instead of simple intervals."
   "Org property name used to store the last calculated repeat timestamp.
 
 This property acts as the reference point for calculating the next
-repetition occurrence to ensure consistency when a task is completed."
+repetition occurrence to ensure consistency when a task is completed.
+When the cron property holds a relative repeater (e.g. \"+1w\") the
+anchor simply records the timestamp produced by Org's own repeat
+mechanism."
   :group 'org-repeat-by-cron
   :type 'string)
 
@@ -156,7 +186,13 @@ Otherwise, it satisfies either rule (standard cron behavior)."
   "Org property name used to store the cron expression for a task.
 
 The value should be a standard 5-field cron string or a 3-field
-string (Day Month Day-of-Week) for daily-level precision."
+string (Day Month Day-of-Week) for daily-level precision.
+It may also be a bare Org repeater starting with \"+\", such as
+\"+1w\" or \"++2d\".  Such a relative rule is handed to Org's own
+`org-auto-repeat-maybe': a single \"+\" is rewritten to \".+\"
+\(repeat relative to the completion time), while \"++\" keeps Org's
+anchored catch-up semantics.  A leading dot is not accepted, and
+upper-case units are lower-cased."
   :group 'org-repeat-by-cron
   :type 'string)
 
@@ -211,16 +247,17 @@ Setting this option has immediate effect only when
   :type 'boolean
   :set (lambda (var val)
          (set-default var val)
-         (if (and global-org-repeat-by-cron-mode val)
+         (if (and (bound-and-true-p global-org-repeat-by-cron-mode) val)
              (advice-add 'org-todo :around #'org-repeat-by-cron--org-todo-advice)
            (advice-remove 'org-todo #'org-repeat-by-cron--org-todo-advice))))
 
 (defcustom org-repeat-by-cron-after-repeat-functions nil
-  "Functions called with no arguments after a cron repeat adjustment.
+  "Functions called with no arguments after a repeat adjustment.
 
 Each function in this list is called once, in list order, after
 `org-repeat-by-cron-on-done' has finished its rescheduling pass
-for the SCHEDULED and/or DEADLINE timestamps.  The functions are
+for the SCHEDULED and/or DEADLINE timestamps, both for cron rules
+and for relative repeaters.  The functions are
 called with point at the entry heading and with no arguments.
 
 They run only for the final `org-trigger-hook' call of a repeat:
@@ -645,6 +682,49 @@ Whitespace at the beginning or end of RULE is ignored."
               ((= n 5) 5)
               (t nil)))))
 
+(defconst org-repeat-by-cron--repeater-cookie-re
+  "[.+]?\\+[0-9]+[hdwmy]\\(?:/[0-9]+[hdwmy]\\)?"
+  "Regexp matching a bare Org repeater cookie.
+
+It matches cookies such as \"+1d\", \"++2w\", \".+1m\" and
+\"+1w/3d\", but not a delay cookie such as \"-2d\".")
+
+(defconst org-repeat-by-cron--relative-rule-re
+  "\\`\\+\\+?[0-9]+[hdwmy]\\(?:/[0-9]+[hdwmy]\\)?\\'"
+  "Regexp matching a `REPEAT_CRON' value that is a bare Org repeater.
+
+Only rules starting with \"+\" are accepted; an explicit dot, as in
+\".+1w\", is not a relative rule.")
+
+(defun org-repeat-by-cron--relative-rule-p (rule)
+  "Return non-nil when RULE is a bare Org repeater starting with \"+\".
+
+RULE is a `REPEAT_CRON' value.  A relative rule is a string that,
+after trimming, consists solely of an Org repeater cookie such as
+\"+1w\", \"++2d\" or \"+1w/3d\".  Units are matched case-insensitively.
+A cron rule, a value starting with \".\", the empty string, nil and
+any string with trailing junk return nil."
+  (when (stringp rule)
+    (let ((s (downcase (string-trim rule))))
+      (and (not (string-empty-p s))
+           (string-match org-repeat-by-cron--relative-rule-re s)
+           (= (match-end 0) (length s))))))
+
+(defun org-repeat-by-cron--relative-cookie (rule)
+  "Rewrite the relative RULE into an Org repeater cookie.
+
+A single \"+\" prefix is turned into \".+\", i.e. \"+1w\" becomes
+\".+1w\", so that the repetition is measured from the completion
+time.  A \"++\" prefix is kept as-is, which preserves the anchored
+catch-up semantics of Org.  The rule is lower-cased so that the
+cookie is always valid for `org-auto-repeat-maybe'.  The function is
+idempotent."
+  (let ((s (downcase (string-trim rule))))
+    (cond
+     ((string-prefix-p "++" s) s)
+     ((string-prefix-p "+" s) (concat "." s))
+     (t s))))
+
 (defun org-repeat-by-cron--normalize-cron-rule (rule)
   "Normalize the cron RULE string to a 5-field format.
 
@@ -716,6 +796,39 @@ otherwise nil."
              (string-match org-repeat-re ts-str))
     (match-string 1 ts-str)))
 
+(defun org-repeat-by-cron--strip-repeater (ts-str)
+  "Remove any Org repeater cookie from timestamp string TS-STR.
+
+The surrounding angle brackets, a time range and a delay cookie
+such as \"-2d\" are preserved.  Return nil when TS-STR is nil."
+  (when ts-str
+    (replace-regexp-in-string
+     (concat "[ \t]*" org-repeat-by-cron--repeater-cookie-re)
+     "" ts-str)))
+
+(defun org-repeat-by-cron--plain-ts (ts-str)
+  "Return TS-STR as a plain timestamp without brackets or repeater.
+
+The result is the form stored in the anchor properties, e.g.
+\"2025-01-13 Mon\" for \"<2025-01-13 Mon .+1w>\"."
+  (when ts-str
+    (string-trim
+     (replace-regexp-in-string
+      "\\(?:>\\|\\]\\)[ \t]*\\'" ""
+      (replace-regexp-in-string
+       "\\`[ \t]*\\(?:<\\|\\[\\)" ""
+       (org-repeat-by-cron--strip-repeater ts-str))))))
+
+(defun org-repeat-by-cron--format-ts-fmt (cookie with-time-p)
+  "Return a `format-time-string' format string ending with COOKIE.
+
+When WITH-TIME-P is non-nil the format also contains an HH:MM
+field.  COOKIE is appended literally; it never contains a percent
+sign, so no escaping is required."
+  (if with-time-p
+      (concat "%Y-%m-%d %a %H:%M " cookie)
+    (concat "%Y-%m-%d %a " cookie)))
+
 (defvar org-repeat-by-cron--repeater-raw nil
   "Symbol indicating which timestamps contain native Org repeater cookies.
 
@@ -743,23 +856,35 @@ ORIG-FUN and ARGS inherates `org-todo'"
 This function is called by `org-after-todo-state-change-hook' to ensure that
 entries using `org-repeat-by-cron' are recognized as repeating tasks.
 It adds a temporary repeater cookie if none is present, ensuring
-`org-trigger-hook' is run and `org-habit' consistency is maintained."
+`org-trigger-hook' is run and `org-habit' consistency is maintained.
+
+When `REPEAT_CRON' holds a relative Org repeater (e.g. \"+1w\"),
+an existing cookie is replaced by the one derived from the rule so
+that the following `org-auto-repeat-maybe' call performs the shift"
   (save-excursion
     (org-back-to-heading t)
     (let* ((pom (point))
            (cron-str (org-entry-get pom org-repeat-by-cron-cron-prop))
-           (cron-arity (org-repeat-by-cron--cron-rule-arity cron-str)))
+           (relative-p (org-repeat-by-cron--relative-rule-p cron-str))
+           (cron-arity (unless relative-p
+                         (org-repeat-by-cron--cron-rule-arity cron-str))))
       (if org-repeat-by-cron--skip-next
-          (org-cancel-repeaters)
+          (org-cancel-repeater)
         (when (and cron-str (not (string-empty-p (string-trim cron-str)))
                    ;; org-state dynamically bound in org.el/org-todo
                    (member org-state org-done-keywords))
-          (if (not cron-arity)
-              (message "[Cron-Repeat] Invalid cron rule: %s" cron-str)
+          (cond
+           ((and (not relative-p) (not cron-arity))
+            (message "[Cron-Repeat] Invalid cron rule: %s" cron-str))
+           (t
             (let* ((deadline-prop (org-entry-get pom org-repeat-by-cron-deadline-prop))
                    (process-deadline nil)
-                   (process-schedule nil))
-
+                   (process-schedule nil)
+                   ;; Temporary placeholder for cron rules, the real
+                   ;; cookie for relative rules.
+                   (cookie (if relative-p
+                               (org-repeat-by-cron--relative-cookie cron-str)
+                             "+1d")))
               (cond
                ((string= deadline-prop "t")
                 (setq process-deadline t))
@@ -772,52 +897,75 @@ It adds a temporary repeater cookie if none is present, ensuring
               (let ((sched-has-rep nil)
                     (dead-has-rep nil))
                 (when process-schedule
-                  (let* ((ts-str (org-entry-get pom "SCHEDULED"))
+                  (let* ((raw-ts-str (org-entry-get pom "SCHEDULED"))
+                         (ts-str (if relative-p
+                                     (org-repeat-by-cron--strip-repeater raw-ts-str)
+                                   raw-ts-str))
                          (has-ts (and ts-str (not (string-empty-p ts-str))))
                          (repeater (and has-ts (org-repeat-by-cron--extract-repeater ts-str))))
                     (cond
                      (repeater
                       (setq sched-has-rep t))
-                     ;; a timestamp without repeater，add a temp repeater "+1d"
+                     ;; a timestamp without repeater，add a temp repeater
                      (has-ts
                       (let ((new-ts-str (if (string-match-p "\\([>]\\|\\]\\)$" ts-str)
-                                            (replace-regexp-in-string "\\([>]\\|\\]\\)$" " +1d\\1" ts-str)
-                                          (concat ts-str " +1d"))))
+                                            (replace-regexp-in-string
+                                             "\\([>]\\|\\]\\)$"
+                                             (concat " " cookie "\\1") ts-str)
+                                          (concat ts-str " " cookie))))
                         (org-schedule nil new-ts-str)))
                      ;; when no timestamp, create one
                      (t
-                      (let* ((arity (org-repeat-by-cron--cron-rule-arity cron-str))
-                             (fmt (if (eq arity 5) "%Y-%m-%d %a %H:%M +1d" "%Y-%m-%d %a +1d"))
+                      (let* ((fmt (org-repeat-by-cron--format-ts-fmt cookie (eq cron-arity 5)))
                              (new-ts-str (format-time-string fmt (current-time))))
                         (org-entry-put pom "SCHEDULED" (concat "<" new-ts-str ">")))))))
                 (when process-deadline
-                  (let* ((ts-str (org-entry-get pom "DEADLINE"))
+                  (let* ((raw-ts-str (org-entry-get pom "DEADLINE"))
+                         (ts-str (if relative-p
+                                     (org-repeat-by-cron--strip-repeater raw-ts-str)
+                                   raw-ts-str))
                          (has-ts (and ts-str (not (string-empty-p ts-str))))
                          (repeater (and has-ts (org-repeat-by-cron--extract-repeater ts-str)))
                          (cron-val (if (string= deadline-prop "t") cron-str deadline-prop)))
                     (cond
                      (repeater
                       (setq dead-has-rep t))
-                     ;; a timestamp without repeater，add a temp repeater "+1d"
+                     ;; a timestamp without repeater，add a temp repeater
                      (has-ts
                       (let ((new-ts-str (if (string-match-p "\\([>]\\|\\]\\)$" ts-str)
-                                            (replace-regexp-in-string "\\([>]\\|\\]\\)$" " +1d\\1" ts-str)
-                                          (concat ts-str " +1d"))))
+                                            (replace-regexp-in-string
+                                             "\\([>]\\|\\]\\)$"
+                                             (concat " " cookie "\\1") ts-str)
+                                          (concat ts-str " " cookie))))
                         (org-deadline nil new-ts-str)))
                      ;; when no timestamp, create one
                      (t
                       (let* ((arity (org-repeat-by-cron--cron-rule-arity cron-val))
-                             (fmt (if (eq arity 5) "%Y-%m-%d %a %H:%M +1d" "%Y-%m-%d %a +1d"))
+                             (fmt (org-repeat-by-cron--format-ts-fmt cookie (eq arity 5)))
                              (new-ts-str (format-time-string fmt (current-time))))
                         (org-entry-put pom "DEADLINE" (concat "<" new-ts-str ">")))))))
                 
-                ;; 4. set org-repeat-by-cron--repeater-raw
+                ;; 4. set org-repeat-by-cron--repeater-raw.  For a
+                ;; relative rule the cookie is always written by this
+                ;; package, so there is no pre-existing cookie to keep.
                 (setq org-repeat-by-cron--repeater-raw
-                      (cond
-                       ((and sched-has-rep dead-has-rep) 'both)
-                       (sched-has-rep 'schedule)
-                       (dead-has-rep 'deadline)
-                       (t nil)))))))))))
+                      (if relative-p
+                          nil
+                        (cond
+                         ((and sched-has-rep dead-has-rep) 'both)
+                         (sched-has-rep 'schedule)
+                         (dead-has-rep 'deadline)
+                         (t nil)))))))))))))
+
+(defun org-repeat-by-cron--run-after-repeat-functions ()
+  "Run `org-repeat-by-cron-after-repeat-functions' at the current heading.
+
+This is called once, for the final `org-trigger-hook' call of a
+repeat, by every rescheduling branch of `org-repeat-by-cron-on-done'."
+  (save-excursion
+    (org-back-to-heading t)
+    (dolist (fn org-repeat-by-cron-after-repeat-functions)
+      (funcall fn))))
 
 (defun org-repeat-by-cron-on-done (change-plist)
   "Reschedule the Org task at point according to CHANGE-PLIST and cron rules.
@@ -832,16 +980,35 @@ is also updated to ensure consistent calculation for the next repetition."
          (pom (point))
          (cron-str (org-entry-get pom org-repeat-by-cron-cron-prop)))
     (if org-repeat-by-cron--skip-next
-          (org-cancel-repeaters)
+          (org-cancel-repeater)
       (when (and cron-str
                  (not (string-empty-p (string-trim cron-str)))
                  (not (member from-str org-done-keywords))
                  (member to-str org-done-keywords))
         (save-excursion
           (org-back-to-heading t)
-          (let ((cron-arity (org-repeat-by-cron--cron-rule-arity cron-str)))
-            (if (not cron-arity)
-                (message "[Cron-Repeat] Invalid cron rule: %s" cron-str)
+          (let ((cron-arity (org-repeat-by-cron--cron-rule-arity cron-str))
+                (relative-p (org-repeat-by-cron--relative-rule-p cron-str)))
+            (cond
+             (relative-p
+              ;; `org-auto-repeat-maybe' runs before `org-trigger-hook'
+              ;; inside `org-todo', so the timestamps have already been
+              ;; shifted by Org.  Record the new values as anchors, but
+              ;; only for the timestamps that actually exist.
+              (let ((sched (org-entry-get pom "SCHEDULED"))
+                    (dead  (org-entry-get pom "DEADLINE")))
+                (when sched
+                  (org-entry-put pom org-repeat-by-cron-anchor-prop
+                                 (org-repeat-by-cron--plain-ts sched)))
+                (when dead
+                  (org-entry-put pom org-repeat-by-cron-deadline-anchor-prop
+                                 (org-repeat-by-cron--plain-ts dead))))
+              ;; Run the post-adjustment functions for relative rules
+              ;; as well; this is the final trigger of the repeat.
+              (org-repeat-by-cron--run-after-repeat-functions))
+             ((not cron-arity)
+              (message "[Cron-Repeat] Invalid cron rule: %s" cron-str))
+             (t
               (let* ((deadline-prop (org-entry-get pom org-repeat-by-cron-deadline-prop))
                      (process-deadline nil)
                      (process-schedule nil)
@@ -924,10 +1091,7 @@ is also updated to ensure consistent calculation for the next repetition."
 
                   ;; 4. Run post-adjustment functions once, only on the
                   ;; final `org-trigger-hook' call of this repeat.
-                  (save-excursion
-                    (org-back-to-heading t)
-                    (dolist (fn org-repeat-by-cron-after-repeat-functions)
-                      (funcall fn))))))))))))
+                  (org-repeat-by-cron--run-after-repeat-functions)))))))))))
 
 ;;; To be called from diary-sexp-entry, where DATE, ENTRY are bound.
 ;;;###autoload
